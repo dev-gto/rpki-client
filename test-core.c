@@ -79,13 +79,13 @@ void print_cert(const struct cert *p)
 
     now = time(NULL);
 	tm = gmtime(&now);
-	strftime(caNow, sizeof(caNow)-1, "%Y-%m-%d %H:%M:%S GMT", tm);
+	strftime(caNow, sizeof(caNow)-1, "%Y-%m-%d %H:%M:%S UTC", tm);
 
 	tm = gmtime(&p->basic.notBefore);
-	strftime(caNotBefore, sizeof(caNotBefore)-1, "%Y-%m-%d %H:%M:%S GMT", tm);
+	strftime(caNotBefore, sizeof(caNotBefore)-1, "%Y-%m-%d %H:%M:%S UTC", tm);
 
 	tm = gmtime(&p->basic.notAfter);
-	strftime(caNotAfter, sizeof(caNotAfter)-1, "%Y-%m-%d %H:%M:%S GMT", tm);
+	strftime(caNotAfter, sizeof(caNotAfter)-1, "%Y-%m-%d %H:%M:%S UTC", tm);
 
 	printf("%*.*s: %s\n", TAB, TAB, "Now", caNow);
 	print_sep_line("Certificate");
@@ -158,15 +158,15 @@ void print_crl (const X509_CRL *p)
 	assert(p != NULL);
 
     now = time(NULL);
-	strftime(caNow, sizeof(caNow)-1, "%Y-%m-%d %H:%M:%S GMT", gmtime(&now));
+	strftime(caNow, sizeof(caNow)-1, "%Y-%m-%d %H:%M:%S UTC", gmtime(&now));
 
 	revoked = X509_CRL_get_REVOKED(p);
 
 	tm = asn1Time2Time(p->crl->lastUpdate);
-	strftime(caLast, sizeof(caLast)-1, "%Y-%m-%d %H:%M:%S GMT", &tm);
+	strftime(caLast, sizeof(caLast)-1, "%Y-%m-%d %H:%M:%S UTC", &tm);
 
 	tm = asn1Time2Time(p->crl->nextUpdate);
-	strftime(caNext, sizeof(caNext)-1, "%Y-%m-%d %H:%M:%S GMT", &tm);
+	strftime(caNext, sizeof(caNext)-1, "%Y-%m-%d %H:%M:%S UTC", &tm);
 
 	printf("%*.*s: %s\n", TAB, TAB, "Now", caNow);
 	print_sep_line("Certificate Revocation List");
@@ -199,7 +199,7 @@ void print_crl (const X509_CRL *p)
 				}
 			}
 			tm = asn1Time2Time(rev->revocationDate);
-			strftime(caRevocationDate, sizeof(caRevocationDate)-1, "%Y-%m-%d %H:%M:%S GMT", &tm);
+			strftime(caRevocationDate, sizeof(caRevocationDate)-1, "%Y-%m-%d %H:%M:%S UTC", &tm);
 			printf("%*.*s:    %s\n", TAB, TAB, "Revokation Date", caRevocationDate);
 		}
 	}
@@ -218,19 +218,19 @@ void print_mft(const struct mft *p)
 
     now = time(NULL);
 	tm = gmtime(&now);
-	strftime(caNow, sizeof(caNow)-1, "%Y-%m-%d %H:%M:%S GMT", tm);
+	strftime(caNow, sizeof(caNow)-1, "%Y-%m-%d %H:%M:%S UTC", tm);
 
 	tm = gmtime(&p->thisUpdate);
-	strftime(caThis, sizeof(caThis)-1, "%Y-%m-%d %H:%M:%S GMT", tm);
+	strftime(caThis, sizeof(caThis)-1, "%Y-%m-%d %H:%M:%S UTC", tm);
 
 	tm = gmtime(&p->nextUpdate);
-	strftime(caNext, sizeof(caNext)-1, "%Y-%m-%d %H:%M:%S GMT", tm);
+	strftime(caNext, sizeof(caNext)-1, "%Y-%m-%d %H:%M:%S UTC", tm);
 
 	tm = gmtime(&p->eeCert.notBefore);
-	strftime(caNotBefore, sizeof(caNotBefore)-1, "%Y-%m-%d %H:%M:%S GMT", tm);
+	strftime(caNotBefore, sizeof(caNotBefore)-1, "%Y-%m-%d %H:%M:%S UTC", tm);
 
 	tm = gmtime(&p->eeCert.notAfter);
-	strftime(caNotAfter, sizeof(caNotAfter)-1, "%Y-%m-%d %H:%M:%S GMT", tm);
+	strftime(caNotAfter, sizeof(caNotAfter)-1, "%Y-%m-%d %H:%M:%S UTC", tm);
 
 	printf("%*.*s: %s\n", TAB, TAB, "Now", caNow);
 	print_sep_line("EE Certificate");
@@ -269,13 +269,13 @@ void print_roa(const struct roa *p)
 
     now = time(NULL);
 	tm = gmtime(&now);
-	strftime(caNow, sizeof(caNow)-1, "%Y-%m-%d %H:%M:%S GMT", tm);
+	strftime(caNow, sizeof(caNow)-1, "%Y-%m-%d %H:%M:%S UTC", tm);
 
 	tm = gmtime(&p->eeCert.notBefore);
-	strftime(caNotBefore, sizeof(caNotBefore)-1, "%Y-%m-%d %H:%M:%S GMT", tm);
+	strftime(caNotBefore, sizeof(caNotBefore)-1, "%Y-%m-%d %H:%M:%S UTC", tm);
 
 	tm = gmtime(&p->eeCert.notAfter);
-	strftime(caNotAfter, sizeof(caNotAfter)-1, "%Y-%m-%d %H:%M:%S GMT", tm);
+	strftime(caNotAfter, sizeof(caNotAfter)-1, "%Y-%m-%d %H:%M:%S UTC", tm);
 
 	printf("%*.*s: %s\n", TAB, TAB, "Now", caNow);
 	print_sep_line("EE Certificate");

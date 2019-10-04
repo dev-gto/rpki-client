@@ -251,7 +251,7 @@ mft_parse_econtent(const unsigned char *d, size_t dsz, struct parse *p, int forc
 	}
 
 	tm = asn1Time2Time(t->value.generalizedtime);
-	this = mktime(&tm);
+	this = timegm(&tm);
 
 	t = sk_ASN1_TYPE_value(seq, i++);
 	if (t->type != V_ASN1_GENERALIZEDTIME) {
@@ -261,7 +261,7 @@ mft_parse_econtent(const unsigned char *d, size_t dsz, struct parse *p, int forc
 		goto out;
 	}
 	tm = asn1Time2Time(t->value.generalizedtime);
-	next = mktime(&tm);
+	next = timegm(&tm);
 
 	strftime(caThis, sizeof(caThis)-1, "%Y-%m-%d %H:%M:%S", gmtime(&this));
 	strftime(caNext, sizeof(caNext)-1, "%Y-%m-%d %H:%M:%S", gmtime(&next));

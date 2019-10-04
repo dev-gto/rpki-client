@@ -141,6 +141,7 @@ void print_cert(const struct cert *p)
 			printf("%*zu: IP: %s-%s\n", TAB, i + 1, buf1, buf2);
 			break;
 		}
+	printf("\n");
 }
 
 // http://www.geo-complex.com/shares/soft/unix/CentOS/OpenVPN/openssl-1.1.0c/crypto/x509/x_crl.c
@@ -202,6 +203,7 @@ void print_crl (const X509_CRL *p)
 			printf("%*.*s:    %s\n", TAB, TAB, "Revokation Date", caRevocationDate);
 		}
 	}
+	printf("\n");
 }
 
 void print_mft(const struct mft *p)
@@ -251,6 +253,7 @@ void print_mft(const struct mft *p)
 		hex_encode(caSHA256, p->files[i].hash, 32);
 		printf("%s  %s\n", caSHA256, p->files[i].file);
 	}
+	printf("\n");
 }
 
 // ROA
@@ -293,6 +296,7 @@ void print_roa(const struct roa *p)
 		printf("%*zu: %s (max: %zu)\n", TAB, i + 1,
 			buf, p->ips[i].maxlength);
 	}
+	printf("\n");
 }
 
 // TAL
@@ -304,4 +308,5 @@ void print_tal(const struct tal *p)
 
 	for (i = 0; i < p->urisz; i++)
 		printf("%5zu: URI: %s\n", i + 1, p->uri[i]);
+	printf("\n");
 }

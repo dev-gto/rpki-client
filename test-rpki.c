@@ -48,6 +48,7 @@ main(int argc, char *argv[])
 	for (i = 1; i < (size_t)argc; i++) {
 		fn = argv[i];
 		sz = strlen(argv[i]);
+		printf("Processing [%s]:\n", fn);
 		if (strcasecmp(fn + sz - 4, ".mft") == 0) {
 			if ((mft = mft_parse(&xp, fn, 1)) != NULL) {
 				print_mft(mft);
@@ -84,10 +85,15 @@ main(int argc, char *argv[])
 					print_cert(cert);
 					cert_free(cert);
 				} else {
+					log_set_silent(1);
 					cert = cert_parse(&xp, fn, NULL);
+					log_set_silent(0);
 					if (cert != NULL) {
 						print_cert(cert);
 						cert_free(cert);
+					}
+					else {
+						log_warnx("Unrecognized file [%s]", fn);
 					}
 				}
 			}

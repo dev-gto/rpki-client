@@ -67,6 +67,12 @@ main(int argc, char *argv[])
 				X509_CRL_free(crl);
 			}
 		}
+		else if (strcasecmp(fn + sz - 4, ".tal") == 0) {
+			if ((tal = tal_parse(fn)) != NULL) {
+				print_tal(tal);
+				tal_free(tal);
+			}
+		}
 		else {
 			log_set_silent(1);
 			// Try checking a TAL

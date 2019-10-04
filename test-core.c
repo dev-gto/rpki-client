@@ -303,10 +303,19 @@ void print_roa(const struct roa *p)
 void print_tal(const struct tal *p)
 {
 	size_t	 i;
+	unsigned char *lpcBuffer;
 
 	assert(p != NULL);
 
+    lpcBuffer = malloc(p->pkeysz * 2 + 1);
+	if (lpcBuffer != NULL) {
+		memset(lpcBuffer, 0, p->pkeysz * 2 + 1);
+		hex_encode(lpcBuffer, p->pkey, p->pkeysz);
+		printf("%*.*s: %s\n", TAB, TAB, "Chave Publica", lpcBuffer);
+		free(lpcBuffer);
+	}
+	print_sep_line("URI");
 	for (i = 0; i < p->urisz; i++)
-		printf("%5zu: URI: %s\n", i + 1, p->uri[i]);
+		printf("%*zu: %s\n", TAB, i + 1, p->uri[i]);
 	printf("\n");
 }

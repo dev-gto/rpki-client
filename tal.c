@@ -110,12 +110,11 @@ tal_parse_stream(const char *fn, FILE *f)
 	while ((linelen = getline(&line, &linesize, f)) != -1) {
 		lineno++;
 		assert(linelen);
-		if (line[linelen - 1] != '\n') {
-			log_warnx("%s: RFC 7730 section 2.1: "
-			    "failed to parse public key", fn);
-			goto out;
+
+		if (line[linelen - 1] == '\n') {
+			linelen--;
 		}
-		line[--linelen] = '\0';
+		line[linelen] = '\0';
 		if (linelen && line[linelen - 1] == '\r')
 			line[--linelen] = '\0';
 

@@ -213,7 +213,7 @@ mft_parse_econtent(const unsigned char *d, size_t dsz, struct parse *p, int forc
 	i = 0;
 	if (sk_ASN1_TYPE_num(seq) == 6) {
 		t = sk_ASN1_TYPE_value(seq, i++);
-		if (t->type != V_ASN1_INTEGER && t->type != V_ASN1_OTHER) {
+		if (t->type != V_ASN1_INTEGER) {
 			log_warnx("%s: RFC 6486 section 4.2.1: version: "
 			    "want ASN.1 integer, have %s (NID %d)",
 			    p->fn, ASN1_tag2str(t->type), t->type);

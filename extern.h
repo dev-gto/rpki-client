@@ -17,6 +17,17 @@
 #ifndef EXTERN_H
 #define EXTERN_H
 
+#include <openssl/opensslv.h>
+#if (OPENSSL_VERSION_NUMBER>=0x10100000L)
+  #define _WITH_OPENSSL_1_1
+#else
+  #define X509_CRL_get0_lastUpdate X509_CRL_get_lastUpdate
+  #define X509_CRL_get0_nextUpdate X509_CRL_get_nextUpdate
+  #define X509_REVOKED_get0_serialNumber(a) (a->serialNumber)
+  #define X509_REVOKED_get0_revocationDate(a) (a->revocationDate)
+  #define ERR_remove_thread_state(NULL) ERR_remove_state(0)
+#endif
+
 #include <stdint.h>
 
 #if !HAVE_PLEDGE
@@ -330,7 +341,7 @@ char		*x509_get_ski_ext(X509_EXTENSION *, const char *);
 
 /* ASN1 helpers. */
 
-struct tm asn1Time2Time(ASN1_TIME* time);
+struct tm asn1Time2Time(const ASN1_TIME* time);
 
 /* Output! */
 

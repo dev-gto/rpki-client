@@ -66,7 +66,7 @@ main(int argc, char *argv[])
 
 	EVP_cleanup();
 	CRYPTO_cleanup_all_ex_data();
-	ERR_remove_state(0);
+	ERR_remove_thread_state(NULL);
 	ERR_free_strings();
 	return i < (size_t)argc ? EXIT_FAILURE : EXIT_SUCCESS;
 }

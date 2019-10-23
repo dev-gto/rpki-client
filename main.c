@@ -1153,7 +1153,7 @@ out:
 
 	EVP_cleanup();
 	CRYPTO_cleanup_all_ex_data();
-	ERR_remove_state(0);
+	ERR_remove_thread_state(NULL);
 	ERR_free_strings();
 
 	exit(rc ? EXIT_SUCCESS : EXIT_FAILURE);
@@ -1504,7 +1504,7 @@ main(int argc, char *argv[])
 
 	EVP_cleanup();
 	CRYPTO_cleanup_all_ex_data();
-	ERR_remove_state(0);
+	ERR_remove_thread_state(NULL);
 	ERR_free_strings();
 	return rc ? EXIT_SUCCESS : EXIT_FAILURE;
 

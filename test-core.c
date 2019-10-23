@@ -145,7 +145,7 @@ void print_cert(const struct cert *p)
 }
 
 // http://www.geo-complex.com/shares/soft/unix/CentOS/OpenVPN/openssl-1.1.0c/crypto/x509/x_crl.c
-void print_crl (const X509_CRL *p)
+void print_crl (X509_CRL *p)
 {
 	int i, numRevoked;
 	char caRevocationDate[64];
@@ -162,18 +162,18 @@ void print_crl (const X509_CRL *p)
 
 	revoked = X509_CRL_get_REVOKED(p);
 
-	tm = asn1Time2Time(p->crl->lastUpdate);
+	tm = asn1Time2Time(X509_CRL_get0_lastUpdate(p));
 	strftime(caLast, sizeof(caLast)-1, "%Y-%m-%d %H:%M:%S UTC", &tm);
 
-	tm = asn1Time2Time(p->crl->nextUpdate);
+	tm = asn1Time2Time(X509_CRL_get0_nextUpdate(p));
 	strftime(caNext, sizeof(caNext)-1, "%Y-%m-%d %H:%M:%S UTC", &tm);
 
 	printf("%*.*s: %s\n", TAB, TAB, "Now", caNow);
 	print_sep_line("Certificate Revocation List");
-	printf("%*.*s: %ld\n", TAB, TAB, "Version", ASN1_INTEGER_get(p->crl->version) + 1);
-	printf("%*.*s: %ld\n", TAB, TAB, "CRL Number", ASN1_INTEGER_get(p->crl_number));
+	printf("%*.*s: %ld\n", TAB, TAB, "Version", X509_CRL_get_version(p) + 1);
+	printf("%*.*s: %ld\n", TAB, TAB, "CRL Number", ASN1_INTEGER_get(X509_CRL_get_ext_d2i(p,NID_crl_number,NULL,NULL)));
 
-	issuerName = X509_NAME_oneline(p->crl->issuer, NULL, 0);
+	issuerName = X509_NAME_oneline(X509_CRL_get_issuer(p), NULL, 0);
 	if (issuerName != NULL) {
 		printf("%*.*s: %s\n", TAB, TAB, "Issuer", issuerName);
 		OPENSSL_free(issuerName);
@@ -188,7 +188,7 @@ void print_crl (const X509_CRL *p)
 		for (i = 0; i < numRevoked; i++) {
 			X509_REVOKED *rev = sk_X509_REVOKED_value(revoked, i);
 			if (rev != NULL) {
-				BIGNUM *bnSrl = ASN1_INTEGER_to_BN(rev->serialNumber, NULL);
+				BIGNUM *bnSrl = ASN1_INTEGER_to_BN(X509_REVOKED_get0_serialNumber(rev), NULL);
 				if (bnSrl != NULL) {
 					char *lpcSrl = BN_bn2hex(bnSrl);
 					if (lpcSrl != NULL) {
@@ -198,7 +198,7 @@ void print_crl (const X509_CRL *p)
 					BN_free(bnSrl);
 				}
 			}
-			tm = asn1Time2Time(rev->revocationDate);
+			tm = asn1Time2Time(X509_REVOKED_get0_revocationDate(rev));
 			strftime(caRevocationDate, sizeof(caRevocationDate)-1, "%Y-%m-%d %H:%M:%S UTC", &tm);
 			printf("%*.*s:    %s\n", TAB, TAB, "Revokation Date", caRevocationDate);
 		}

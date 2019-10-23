@@ -33,7 +33,7 @@
  * Return the time.
  */
 // https://stackoverflow.com/questions/10975542/asn1-time-to-time-t-conversion
-struct tm asn1Time2Time(ASN1_TIME* time)
+struct tm asn1Time2Time(const ASN1_TIME* time)
 {
     struct tm t;
     const char* str = (const char*) time->data;

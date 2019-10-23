@@ -20,6 +20,7 @@
 #include <openssl/opensslv.h>
 #if (OPENSSL_VERSION_NUMBER>=0x10100000L)
   #define _WITH_OPENSSL_1_1
+  #define ERR_remove_thread_state(NULL)
 #else
   #define X509_CRL_get0_lastUpdate X509_CRL_get_lastUpdate
   #define X509_CRL_get0_nextUpdate X509_CRL_get_nextUpdate

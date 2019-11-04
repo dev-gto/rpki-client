@@ -20,6 +20,7 @@
 #include <sys/socket.h>
 
 #include <assert.h>
+#include <err.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -318,4 +319,32 @@ void print_tal(const struct tal *p)
 	for (i = 0; i < p->urisz; i++)
 		printf("%*zu: %s\n", TAB, i + 1, p->uri[i]);
 	printf("\n");
+}
+
+// This is not an original code from openbsd
+struct tal *
+tal_parse_from_file(const char *fn)
+{
+	FILE		*f;
+	char		*buf;
+	size_t		 szFile;
+	struct tal	*p;
+
+	p = NULL;
+	if ((f = fopen(fn, "r")) == NULL)
+		err(EXIT_FAILURE, "%s: open", fn);
+	fseek(f, 0L, SEEK_END);
+	szFile = ftell(f);
+	fseek(f, 0L, SEEK_SET);
+	buf = malloc(szFile + 1);
+	if (buf != NULL) {
+		memset (buf, 0, szFile + 1);
+		fread (buf, szFile, 1, f);
+		p = tal_parse(fn, buf);
+		free (buf);
+	}
+	fclose(f);
+
+
+	return p;
 }

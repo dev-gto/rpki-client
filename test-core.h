@@ -27,4 +27,6 @@ void print_mft(const struct mft *p);
 void print_roa(const struct roa *p);
 void print_tal(const struct tal *p);
 
+struct tal	*tal_parse_from_file(const char *fn);
+
 #endif

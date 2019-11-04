@@ -23,7 +23,6 @@
 #include <sys/wait.h>
 
 #include <assert.h>
-#include <ctype.h>
 #include <err.h>
 #include <dirent.h>
 #include <fcntl.h>
@@ -464,59 +463,11 @@ queue_add_from_mft_set(int fd, struct entityq *q, const struct mft *mft,
 static void
 queue_add_tal(int fd, struct entityq *q, const char *file, size_t *eid)
 {
-	char		*nfile, *nbuf, *line = NULL, *buf = NULL;
-	FILE		*in;
-	ssize_t		 n, i;
-	size_t		 sz = 0, bsz = 0;
-	int		 optcomment = 1;
-
-	if ((in = fopen(file, "r")) == NULL)
-		err(EXIT_FAILURE, "fopen: %s", file);
-
-	while ((n = getline(&line, &sz, in)) != -1) {
-		/* replace CRLF with just LF */
-		if (n > 1 && line[n - 1] == '\n' && line[n - 2] == '\r') {
-			line[n - 2] = '\n';
-			line[n - 1] = '\0';
-			n--;
-		}
-		if (optcomment) {
-			/* if this is comment, just eat the line */
-			if (line[0] == '#')
-				continue;
-			optcomment = 0;
-			/*
-			 * Empty line is end of section and needs
-			 * to be eaten as well.
-			 */
-			if (line[0] == '\n')
-				continue;
-		}
-
-		/* make sure every line is valid ascii */
-		for (i = 0; i < n; i++)
-			if (!isprint(line[i]) && !isspace(line[i]))
-				errx(EXIT_FAILURE, "getline: %s: "
-				    "invalid content", file);
-
-		/* concat line to buf */
-		if ((nbuf = realloc(buf, bsz + n + 1)) == NULL)
-			err(EXIT_FAILURE, NULL);
-		buf = nbuf;
-		bsz += n + 1;
-		strlcat(buf, line, bsz);
-		/* limit the buffer size */
-		if (bsz > 4096)
-			errx(EXIT_FAILURE, "%s: file too big", file);
-	}
-
-	free(line);
-	if (ferror(in))
-		err(EXIT_FAILURE, "getline: %s", file);
-	fclose(in);
+	char	*nfile, *buf;
 
 	if ((nfile = strdup(file)) == NULL)
 		err(EXIT_FAILURE, "strdup");
+	buf = tal_read_file(file);
 
 	/* Not in a repository, so directly add to queue. */
 	entityq_add(fd, q, nfile, RTYPE_TAL, NULL, NULL, NULL, 0, buf, eid);

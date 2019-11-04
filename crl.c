@@ -1,4 +1,4 @@
-/*	$Id$ */
+/*	$OpenBSD: crl.c,v 1.5 2019/08/13 13:27:26 claudio Exp $ */
 /*
  * Copyright (c) 2019 Kristaps Dzonsons <kristaps@bsd.lv>
  *

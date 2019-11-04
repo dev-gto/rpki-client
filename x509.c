@@ -1,4 +1,4 @@
-/*	$Id$ */
+/*	$OpenBSD: x509.c,v 1.7 2019/06/20 16:09:15 claudio Exp $ */
 /*
  * Copyright (c) 2019 Kristaps Dzonsons <kristaps@bsd.lv>
  *

@@ -1,4 +1,4 @@
-/*	$Id$ */
+/*	$OpenBSD: cert.c,v 1.7 2019/08/13 13:27:26 claudio Exp $ */
 /*
  * Copyright (c) 2019 Kristaps Dzonsons <kristaps@bsd.lv>
  *

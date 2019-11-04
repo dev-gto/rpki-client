@@ -1,4 +1,4 @@
-/*	$Id$ */
+/*	$OpenBSD: io.c,v 1.5 2019/08/13 13:34:43 florian Exp $ */
 /*
  * Copyright (c) 2019 Kristaps Dzonsons <kristaps@bsd.lv>
  *

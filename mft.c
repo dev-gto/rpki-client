@@ -25,7 +25,7 @@
 #include <unistd.h>
 
 #include <openssl/ssl.h>
-#include <openssl/crypto.h>
+
 #include "extern.h"
 
 /*
@@ -303,7 +303,6 @@ mft_parse_econtent(const unsigned char *d, size_t dsz, struct parse *p, int forc
 		    p->fn, ASN1_tag2str(t->type), t->type);
 		goto out;
 	}
-
 	from = t->value.generalizedtime;
 
 	t = sk_ASN1_TYPE_value(seq, i++);

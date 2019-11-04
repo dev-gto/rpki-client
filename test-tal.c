@@ -52,7 +52,7 @@ main(int argc, char *argv[])
 	argc -= optind;
 
 	for (i = 0; i < (size_t)argc; i++) {
-		if ((tal = tal_parse(argv[i])) == NULL)
+		if ((tal = tal_parse_from_file(argv[i])) == NULL)
 			break;
 		if (verbose)
 			print_tal(tal);

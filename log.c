@@ -1,4 +1,4 @@
-/*	$Id$ */
+/*	$OpenBSD: log.c,v 1.4 2019/06/19 16:30:37 deraadt Exp $ */
 /*
  * Copyright (c) 2019 Kristaps Dzonsons <kristaps@bsd.lv>
  *
@@ -68,7 +68,6 @@ cryptoerrx(const char *fmt, ...)
 		va_end(ap);
 	}
 
-    // should review this, abruptly exit may leave untied finalizations
 	exit(EXIT_FAILURE);
 }
 

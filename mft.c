@@ -1,4 +1,4 @@
-/*	$Id$ */
+/*	$OpenBSD: mft.c,v 1.8 2019/10/23 07:36:29 claudio Exp $ */
 /*
  * Copyright (c) 2019 Kristaps Dzonsons <kristaps@bsd.lv>
  *

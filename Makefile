@@ -11,6 +11,9 @@ OBJS	 = as.o \
 	   log.o \
 	   mft.o \
 	   output-bgpd.o \
+	   output-bird.o \
+	   output-csv.o \
+	   output-json.o \
 	   roa.o \
 	   rsync.o \
 	   tal.o \
@@ -36,8 +39,8 @@ BINS	 = rpki-client \
 ARCH=$(shell uname -s|tr A-Z a-z)
 ifeq ($(ARCH), linux)
 	# Linux.
-	LDADD += `pkg-config --libs openssl` -lresolv
-	CFLAGS += `pkg-config --cflags openssl`
+	LDADD += `pkg-config --libs openssl` -lresolv 
+	CFLAGS += `pkg-config --cflags openssl` -D_LINUX
 else
 	# OpenBSD.
 	CFLAGS += -I/usr/local/include/eopenssl

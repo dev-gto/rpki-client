@@ -68,7 +68,7 @@ main(int argc, char *argv[])
 			}
 		}
 		else if (strcasecmp(fn + sz - 4, ".tal") == 0) {
-			if ((tal = tal_parse(fn)) != NULL) {
+			if ((tal = tal_parse_from_file(fn)) != NULL) {
 				print_tal(tal);
 				tal_free(tal);
 			}
@@ -76,7 +76,7 @@ main(int argc, char *argv[])
 		else {
 			log_set_silent(1);
 			// Try checking a TAL
-			tal = tal_parse(fn);
+			tal = tal_parse_from_file(fn);
 			log_set_silent(0);
 			if (tal != NULL) {
 				print_tal(tal);

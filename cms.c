@@ -27,7 +27,6 @@
 #include <openssl/cms.h>
 
 #include "extern.h"
-#include "test-core.h"
 
 /*
  * Parse and validate a self-signed CMS message, where the signing X509

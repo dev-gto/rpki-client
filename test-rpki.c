@@ -75,28 +75,28 @@ main(int argc, char *argv[])
 		}
 		else {
 			log_set_silent(1);
-			// Try checking a TAL
-			tal = tal_parse_from_file(fn);
+			// Try checking a TA cert
+			cert = ta_parse(&xp, fn, NULL, 0);
 			log_set_silent(0);
-			if (tal != NULL) {
-				print_tal(tal);
-				tal_free(tal);
-			}
-			else {
+			if (cert != NULL) {
+				print_cert(cert);
+				cert_free(cert);
+			} else {
 				log_set_silent(1);
-				// Try checking a TA cert
-				cert = ta_parse(&xp, fn, NULL, 0);
+				cert = cert_parse(&xp, fn, NULL);
 				log_set_silent(0);
 				if (cert != NULL) {
 					print_cert(cert);
 					cert_free(cert);
-				} else {
+				}
+				else {
 					log_set_silent(1);
-					cert = cert_parse(&xp, fn, NULL);
+					// Try checking a TAL
+					tal = tal_parse_from_file(fn);
 					log_set_silent(0);
-					if (cert != NULL) {
-						print_cert(cert);
-						cert_free(cert);
+					if (tal != NULL) {
+						print_tal(tal);
+						tal_free(tal);
 					}
 					else {
 						log_warnx("Unrecognized file [%s]", fn);

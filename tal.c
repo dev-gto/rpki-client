@@ -30,6 +30,72 @@
 
 #include "extern.h"
 
+static int
+https_uri_parse(const char **hostp, size_t *hostsz,
+    const char **pathp, size_t *pathsz,
+    enum rtype *rtypep, const char *uri)
+{
+	const char	*host, *path;
+	size_t		 sz;
+
+	/* Initialise all output values to NULL or 0. */
+
+	if (hostsz != NULL)
+		*hostsz = 0;
+	if (pathsz != NULL)
+		*pathsz = 0;
+	if (hostp != NULL)
+		*hostp = 0;
+	if (pathp != NULL)
+		*pathp = 0;
+	if (rtypep != NULL)
+		*rtypep = RTYPE_EOF;
+
+	/* Case-insensitive rsync URI. */
+	if (strncasecmp(uri, "https://", 8)) {
+		log_warnx("%s: not using https schema", uri);
+		return 0;
+	}
+
+	/* Parse the non-zero-length hostname. */
+
+	host = uri + 8;
+
+	if ((path = strchr(host, '/')) == NULL) {
+		log_warnx("%s: missing https path", uri);
+		return 0;
+	} else if (path == host) {
+		log_warnx("%s: zero-length https path", uri);
+		return 0;
+	}
+
+	if (hostp != NULL)
+		*hostp = host;
+	if (hostsz != NULL)
+		*hostsz = path - host;
+
+	path++;
+	sz = strlen(path);
+
+	if (pathp != NULL)
+		*pathp = path;
+	if (pathsz != NULL)
+		*pathsz = sz;
+
+	if (rtypep != NULL && sz > 4) {
+		if (strcasecmp(path + sz - 4, ".roa") == 0)
+			*rtypep = RTYPE_ROA;
+		else if (strcasecmp(path + sz - 4, ".mft") == 0)
+			*rtypep = RTYPE_MFT;
+		else if (strcasecmp(path + sz - 4, ".cer") == 0)
+			*rtypep = RTYPE_CER;
+		else if (strcasecmp(path + sz - 4, ".crl") == 0)
+			*rtypep = RTYPE_CRL;
+	}
+
+	return 1;
+}
+
 /*
  * Inner function for parsing RFC 7730 from a buffer.
  * Returns a valid pointer on success, NULL otherwise.
@@ -72,10 +138,15 @@ tal_parse_buffer(const char *fn, char *buf)
 			err(EXIT_FAILURE, NULL);
 		tal->urisz++;
 
-		/* Make sure we're a proper rsync URI. */
-		if (!rsync_uri_parse(NULL, NULL,
-		    NULL, NULL, NULL, NULL, &rp, line)) {
-			log_warnx("%s: RFC 7730 section 2.1: "
+		/* Make sure we're a proper rsync/https URI. */
+		if (strncasecmp(line, "https://", 8) == 0) {
+			if (!https_uri_parse(NULL, NULL, NULL, NULL, &rp, line)) {
+				log_warnx("%s: RFC 8630 section 2.2: "
+			    	"failed to parse URL: %s", fn, line);
+				goto out;
+			}
+		} else if (!rsync_uri_parse(NULL, NULL, NULL, NULL, NULL, NULL, &rp, line)) {
+			log_warnx("%s: RFC 8630 section 2.2: "
 			    "failed to parse URL: %s", fn, line);
 			goto out;
 		}
@@ -145,15 +216,17 @@ tal_parse(const char *fn, char *buf)
 	if (p != NULL) {
 		/* extract the TAL basename (without .tal suffix) */
 		d = basename((char*)fn);
-		if (d == NULL)
-			err(EXIT_FAILURE, "%s: basename", fn);
-		dlen = strlen(d);
-		if (strcasecmp(d + dlen - 4, ".tal") == 0)
-			dlen -= 4;
-		if ((p->descr = malloc(dlen + 1)) == NULL)
-			err(EXIT_FAILURE, NULL);
-		memcpy(p->descr, d, dlen);
-		p->descr[dlen] = 0;
+		if (d == NULL) {
+			log_warnx("%s: basename", fn);
+		} else {
+			dlen = strlen(d);
+			if (strcasecmp(d + dlen - 4, ".tal") == 0)
+				dlen -= 4;
+			if ((p->descr = malloc(dlen + 1)) == NULL)
+				err(EXIT_FAILURE, NULL);
+			memcpy(p->descr, d, dlen);
+			p->descr[dlen] = 0;
+		}
 	}
 	return p;
 }

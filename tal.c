@@ -142,18 +142,19 @@ tal_parse(const char *fn, char *buf)
 
 	p = tal_parse_buffer(fn, buf);
 
-	/* extract the TAL basename (without .tal suffix) */
-	d = basename((char*)fn);
-	if (d == NULL)
-		err(EXIT_FAILURE, "%s: basename", fn);
-	dlen = strlen(d);
-	if (strcasecmp(d + dlen - 4, ".tal") == 0)
-		dlen -= 4;
-	if ((p->descr = malloc(dlen + 1)) == NULL)
-		err(EXIT_FAILURE, NULL);
-	memcpy(p->descr, d, dlen);
-	p->descr[dlen] = 0;
-
+	if (p != NULL) {
+		/* extract the TAL basename (without .tal suffix) */
+		d = basename((char*)fn);
+		if (d == NULL)
+			err(EXIT_FAILURE, "%s: basename", fn);
+		dlen = strlen(d);
+		if (strcasecmp(d + dlen - 4, ".tal") == 0)
+			dlen -= 4;
+		if ((p->descr = malloc(dlen + 1)) == NULL)
+			err(EXIT_FAILURE, NULL);
+		memcpy(p->descr, d, dlen);
+		p->descr[dlen] = 0;
+	}
 	return p;
 }
 
@@ -231,9 +232,15 @@ tal_free(struct tal *p)
 		for (i = 0; i < p->urisz; i++)
 			free(p->uri[i]);
 
-	free(p->pkey);
-	free(p->uri);
-	free(p->descr);
+	if (p->pkey != NULL) {
+		free(p->pkey);
+	}
+	if (p->uri != NULL) {
+		free(p->uri);
+	}
+	if (p->descr != NULL) {
+		free(p->descr);
+	}
 	free(p);
 }
 

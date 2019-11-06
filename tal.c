@@ -1,4 +1,4 @@
-/*	$OpenBSD: tal.c,v 1.10 2019/11/04 09:39:06 claudio Exp $ */
+/*	$OpenBSD: tal.c,v 1.12 2019/11/06 08:18:11 claudio Exp $ */
 /*
  * Copyright (c) 2019 Kristaps Dzonsons <kristaps@bsd.lv>
  *
@@ -212,22 +212,21 @@ tal_parse(const char *fn, char *buf)
 	size_t		 dlen;
 
 	p = tal_parse_buffer(fn, buf);
+	if (p == NULL)
+		return NULL;
 
-	if (p != NULL) {
-		/* extract the TAL basename (without .tal suffix) */
-		d = basename((char*)fn);
-		if (d == NULL) {
-			log_warnx("%s: basename", fn);
-		} else {
-			dlen = strlen(d);
-			if (strcasecmp(d + dlen - 4, ".tal") == 0)
-				dlen -= 4;
-			if ((p->descr = malloc(dlen + 1)) == NULL)
-				err(EXIT_FAILURE, NULL);
-			memcpy(p->descr, d, dlen);
-			p->descr[dlen] = 0;
-		}
-	}
+	/* extract the TAL basename (without .tal suffix) */
+	d = basename((char*)fn);
+	if (d == NULL)
+		log_warnx("%s: basename", fn);
+	dlen = strlen(d);
+	if (strcasecmp(d + dlen - 4, ".tal") == 0)
+		dlen -= 4;
+	if ((p->descr = malloc(dlen + 1)) == NULL)
+		err(EXIT_FAILURE, NULL);
+	memcpy(p->descr, d, dlen);
+	p->descr[dlen] = 0;
+
 	return p;
 }
 
@@ -273,9 +272,12 @@ tal_read_file(const char *file)
 		/* concat line to buf */
 		if ((nbuf = realloc(buf, bsz + n + 1)) == NULL)
 			err(EXIT_FAILURE, NULL);
+		if (buf == NULL)
+			nbuf[0] = '\0';	/* initialize buffer */
 		buf = nbuf;
 		bsz += n + 1;
-		strlcat(buf, line, bsz);
+		if (strlcat(buf, line, bsz) >= bsz)
+			errx(EXIT_FAILURE, "strlcat overflow");
 		/* limit the buffer size */
 		if (bsz > 4096)
 			errx(EXIT_FAILURE, "%s: file too big", file);
@@ -305,15 +307,9 @@ tal_free(struct tal *p)
 		for (i = 0; i < p->urisz; i++)
 			free(p->uri[i]);
 
-	if (p->pkey != NULL) {
-		free(p->pkey);
-	}
-	if (p->uri != NULL) {
-		free(p->uri);
-	}
-	if (p->descr != NULL) {
-		free(p->descr);
-	}
+	free(p->pkey);
+	free(p->uri);
+	free(p->descr);
 	free(p);
 }
 

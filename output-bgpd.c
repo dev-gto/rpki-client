@@ -1,4 +1,4 @@
-/*	$OpenBSD: output-bgpd.c,v 1.12 2019/10/16 17:38:46 claudio Exp $ */
+/*	$OpenBSD: output-bgpd.c,v 1.16 2019/12/04 23:03:05 benno Exp $ */
 /*
  * Copyright (c) 2019 Kristaps Dzonsons <kristaps@bsd.lv>
  *
@@ -16,18 +16,20 @@
  */
 #include "config.h"
 
+#include <stdint.h>
 #include <stdlib.h>
 #include <openssl/ssl.h>
 
 #include "extern.h"
 
-void
-output_bgpd(FILE *out, struct vrp_tree *vrps)
+int
+output_bgpd(FILE *out, struct vrp_tree *vrps, void *arg)
 {
 	char		 buf1[64], buf2[32];
 	struct vrp	*v;
 
-	fprintf(out, "roa-set {\n");
+	if (fprintf(out, "roa-set {\n") < 0)
+		return -1;
 
 	RB_FOREACH(v, vrp_tree, vrps) {
 		ip_addr_print(&v->addr, v->afi, buf1, sizeof(buf1));
@@ -36,8 +38,11 @@ output_bgpd(FILE *out, struct vrp_tree *vrps)
 			    v->maxlength);
 		else
 			buf2[0] = '\0';
-		fprintf(out, "\t%s %ssource-as %u\n", buf1, buf2, v->asid);
+		if (fprintf(out, "\t%s %ssource-as %u\n", buf1, buf2, v->asid) < 0)
+			return -1;
 	}
 
-	fprintf(out, "}\n");
+	if (fprintf(out, "}\n") < 0)
+		return -1;
+	return 0;
 }

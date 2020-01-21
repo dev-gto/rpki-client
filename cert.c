@@ -1,4 +1,4 @@
-/*	$OpenBSD: cert.c,v 1.7 2019/08/13 13:27:26 claudio Exp $ */
+/*	$OpenBSD: cert.c,v 1.13 2019/11/29 05:11:18 benno Exp $ */
 /*
  * Copyright (c) 2019 Kristaps Dzonsons <kristaps@bsd.lv>
  *
@@ -89,7 +89,7 @@ append_ip(struct parse *p, const struct cert_ip *ip)
 	res->ips = reallocarray(res->ips, res->ipsz + 1,
 	    sizeof(struct cert_ip));
 	if (res->ips == NULL)
-		err(EXIT_FAILURE, NULL);
+		err(1, NULL);
 	res->ips[res->ipsz++] = *ip;
 	return 1;
 }
@@ -108,7 +108,7 @@ append_as(struct parse *p, const struct cert_as *as)
 	p->res->as = reallocarray(p->res->as, p->res->asz + 1,
 	    sizeof(struct cert_as));
 	if (p->res->as == NULL)
-		err(EXIT_FAILURE, NULL);
+		err(1, NULL);
 	p->res->as[p->res->asz++] = *as;
 	return 1;
 }
@@ -206,7 +206,7 @@ sbgp_sia_resource_mft(struct parse *p,
 			goto out;
 
 		if ((p->res->mft = strndup((const char *)d, plen)) == NULL)
-			err(EXIT_FAILURE, NULL);
+			err(1, NULL);
 
 		/* Make sure it's an MFT rsync address. */
 
@@ -249,7 +249,7 @@ sbgp_sia_resource_mft(struct parse *p,
 			goto out;
 
 		if ((p->res->rep = strndup((const char *)d, plen)) == NULL)
-			err(EXIT_FAILURE, NULL);
+			err(1, NULL);
 
 		/* Make sure it's an REP rsync address. */
 
@@ -362,7 +362,7 @@ sbgp_crl_bits(struct parse *p, const unsigned char *d, size_t dsz)
 	p->res->crl = strndup((char *)nm->d.uniformResourceIdentifier->data,
 	    nm->d.uniformResourceIdentifier->length);
 	if (p->res->crl == NULL)
-		err(EXIT_FAILURE, NULL);
+		err(1, NULL);
 
 	rc = 1;
 out:
@@ -1156,7 +1156,7 @@ cert_parse_inner(X509 **xp, const char *fn, const unsigned char *dgst, int ta)
 	*xp = NULL;
 
 	if ((bio = BIO_new_file(fn, "rb")) == NULL) {
-		if (verbose > 0)
+		if (log_get_verbose() > 0)
 			cryptowarnx("%s: BIO_new_file", fn);
 		return NULL;
 	}
@@ -1164,7 +1164,7 @@ cert_parse_inner(X509 **xp, const char *fn, const unsigned char *dgst, int ta)
 	memset(&p, 0, sizeof(struct parse));
 	p.fn = fn;
 	if ((p.res = calloc(1, sizeof(struct cert))) == NULL)
-		err(EXIT_FAILURE, NULL);
+		err(1, NULL);
 
 	/*
 	 * If we have a digest specified, create an MD chain that will
@@ -1203,7 +1203,7 @@ cert_parse_inner(X509 **xp, const char *fn, const unsigned char *dgst, int ta)
 		assert(sz == SHA256_DIGEST_LENGTH);
 
 		if (memcmp(mdbuf, dgst, SHA256_DIGEST_LENGTH)) {
-			if (verbose > 0)
+			if (log_get_verbose() > 0)
 				log_warnx("%s: bad message digest", p.fn);
 			goto out;
 		}
@@ -1248,6 +1248,9 @@ cert_parse_inner(X509 **xp, const char *fn, const unsigned char *dgst, int ta)
 			goto out;
 	}
 
+	if (!ta)
+		p.res->crl = x509_get_crl(x, p.fn);
+
 	/* Validation on required fields. */
 
 	if (p.res->basic.ski == NULL) {
@@ -1289,6 +1292,11 @@ cert_parse_inner(X509 **xp, const char *fn, const unsigned char *dgst, int ta)
 		    "missing SIA", p.fn);
 		goto out;
 	}
+#ifdef _WITH_OPENSSL_1_1
+	if (X509_up_ref(x) == 0)
+		errx(1, "king bula");
+#endif
+	p.res->x509 = x;
 
 	rc = 1;
 out:
@@ -1363,6 +1371,9 @@ cert_free(struct cert *p)
 	free(p->mft);
 	free(p->ips);
 	free(p->as);
+#ifdef _WITH_OPENSSL_1_1
+	X509_free(p->x509);
+#endif
 	free(p);
 }
 
@@ -1473,20 +1484,20 @@ cert_read(int fd)
 	int		 has_crl, has_aki;
 
 	if ((p = calloc(1, sizeof(struct cert))) == NULL)
-		err(EXIT_FAILURE, NULL);
+		err(1, NULL);
 
 	io_simple_read(fd, &p->valid, sizeof(int));
 	io_simple_read(fd, &p->ipsz, sizeof(size_t));
 	p->ips = calloc(p->ipsz, sizeof(struct cert_ip));
 	if (p->ips == NULL)
-		err(EXIT_FAILURE, NULL);
+		err(1, NULL);
 	for (i = 0; i < p->ipsz; i++)
 		cert_ip_read(fd, &p->ips[i]);
 
 	io_simple_read(fd, &p->asz, sizeof(size_t));
 	p->as = calloc(p->asz, sizeof(struct cert_as));
 	if (p->as == NULL)
-		err(EXIT_FAILURE, NULL);
+		err(1, NULL);
 	for (i = 0; i < p->asz; i++)
 		cert_as_read(fd, &p->as[i]);
 
@@ -1502,3 +1513,23 @@ cert_read(int fd)
 	return p;
 }
 
+struct auth *
+auth_find(struct auth_tree *auths, const char *aki)
+{
+	struct auth a;
+	struct cert c;
+
+	/* we look up the cert where the ski == aki */
+	c.basic.ski = (char *)aki;
+	a.cert = &c;
+
+	return RB_FIND(auth_tree, auths, &a);
+}
+
+static inline int
+authcmp(struct auth *a, struct auth *b)
+{
+        return strcmp(a->cert->basic.ski, b->cert->basic.ski);
+}
+
+RB_GENERATE(auth_tree, auth, entry, authcmp);

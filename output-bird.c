@@ -1,4 +1,4 @@
-/*	$OpenBSD: output-bird.c,v 1.1 2019/10/16 17:43:29 claudio Exp $ */
+/*	$OpenBSD: output-bird.c,v 1.6 2019/12/04 23:03:05 benno Exp $ */
 /*
  * Copyright (c) 2019 Claudio Jeker <claudio@openbsd.org>
  *
@@ -16,24 +16,30 @@
  */
 #include "config.h"
 
+#include <stdint.h>
 #include <stdlib.h>
 #include <openssl/ssl.h>
 
 #include "extern.h"
 
-void
-output_bird(FILE *out, struct vrp_tree *vrps, const char *tablename)
+int
+output_bird(FILE *out, struct vrp_tree *vrps, void *arg)
 {
+	const char	*bird_tablename = arg;
 	char		 buf[64];
 	struct vrp	*v;
 
-	fprintf(out, "roa table %s {\n", tablename);
+	if (fprintf(out, "roa table %s {\n", bird_tablename) < 0)
+		return -1;
 
 	RB_FOREACH(v, vrp_tree, vrps) {
 		ip_addr_print(&v->addr, v->afi, buf, sizeof(buf));
-		fprintf(out, "\troa %s max %u as %u;\n", buf, v->maxlength,
-		    v->asid);
+		if (fprintf(out, "\troa %s max %u as %u;\n", buf, v->maxlength,
+		    v->asid) < 0)
+		return -1;
 	}
 
-	fprintf(out, "}\n");
+	if (fprintf(out, "}\n") < 0)
+		return -1;
+	return 0;
 }

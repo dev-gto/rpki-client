@@ -19,7 +19,7 @@
 
 #ifdef _LINUX
 #include <bsd/sys/tree.h>
-#else
+#elif HAVE_SYS_TREE
 #include <sys/tree.h>
 #endif
 #include <openssl/opensslv.h>
@@ -33,6 +33,7 @@
   #define X509_REVOKED_get0_serialNumber(a) (a->serialNumber)
   #define X509_REVOKED_get0_revocationDate(a) (a->revocationDate)
   #define ERR_remove_thread_state(NULL) ERR_remove_state(0)
+  #define ASN1_STRING_get0_data(a) ASN1_STRING_data(a)
 #endif
 
 #include <stdint.h>
@@ -44,7 +45,14 @@
 # define unveil(x, y) (1)
 #endif
 
-enum	cert_as_type {
+/*
+ * Not all systems support __unused.
+ */
+#ifndef __unused
+# define __unused
+#endif
+
+enum cert_as_type {
 	CERT_AS_ID, /* single identifier */
 	CERT_AS_INHERIT, /* inherit from parent */
 	CERT_AS_RANGE, /* range of identifiers */
@@ -54,7 +62,7 @@ enum	cert_as_type {
  * An AS identifier range.
  * The maximum AS identifier is an unsigned 32 bit integer (RFC 6793).
  */
-struct	cert_as_range {
+struct cert_as_range {
 	uint32_t	 min; /* minimum non-zero */
 	uint32_t	 max; /* maximum */
 };
@@ -63,7 +71,7 @@ struct	cert_as_range {
  * An autonomous system (AS) object.
  * AS identifiers are unsigned 32 bit integers (RFC 6793).
  */
-struct	cert_as {
+struct cert_as {
 	enum cert_as_type type; /* type of AS specification */
 	union {
 		uint32_t id; /* singular identifier */
@@ -75,7 +83,7 @@ struct	cert_as {
  * AFI values are assigned by IANA.
  * In rpki-client, we only accept the IPV4 and IPV6 AFI values.
  */
-enum	afi {
+enum afi {
 	AFI_IPV4 = 1,
 	AFI_IPV6 = 2
 };
@@ -85,7 +93,7 @@ enum	afi {
  * This is either in a certificate or an ROA.
  * It may either be IPv4 or IPv6.
  */
-struct	ip_addr {
+struct ip_addr {
 	unsigned char	 addr[16]; /* binary address prefix */
 	unsigned char	 prefixlen; /* number of valid bits in address */
 };
@@ -94,7 +102,7 @@ struct	ip_addr {
  * An IP address (IPv4 or IPv6) range starting at the minimum and making
  * its way to the maximum.
  */
-struct	ip_addr_range {
+struct ip_addr_range {
 	struct ip_addr min; /* minimum ip */
 	struct ip_addr max; /* maximum ip */
 };
@@ -114,7 +122,7 @@ struct	basicCertificate {
 	time_t	notBefore;
 };
 
-enum	cert_ip_type {
+enum cert_ip_type {
 	CERT_IP_ADDR, /* IP address range w/shared prefix */
 	CERT_IP_INHERIT, /* inherited IP address */
 	CERT_IP_RANGE /* range of IP addresses */
@@ -126,7 +134,7 @@ enum	cert_ip_type {
  * The RFC specifies multiple address or ranges per AFI; this structure
  * encodes both the AFI and a single address or range.
  */
-struct	cert_ip {
+struct cert_ip {
 	enum afi		afi; /* AFI value */
 	enum cert_ip_type	type; /* type of IP entry */
 	unsigned char		min[16]; /* full range minimum */
@@ -143,7 +151,7 @@ struct	cert_ip {
  * All AS numbers are guaranteed to be non-overlapping and properly
  * inheriting.
  */
-struct	cert {
+struct cert {
 	struct cert_ip	*ips; /* list of IP address ranges */
 	size_t		 ipsz; /* length of "ips" */
 	struct cert_as	*as; /* list of AS numbers and ranges */
@@ -153,6 +161,7 @@ struct	cert {
 	char		*rep; /* repository (rsync:// uri) */
 	struct basicCertificate basic;
 	int			valid; /* validated resources */
+	X509		*x509; /* the cert */
 };
 
 /*
@@ -162,7 +171,7 @@ struct	cert {
  * It also includes the public key for verifying those trust anchor
  * certificates.
  */
-struct	tal {
+struct tal {
 	char		**uri; /* well-formed rsync URIs */
 	size_t		 urisz; /* number of URIs */
 	unsigned char	*pkey; /* DER-encoded public key */
@@ -173,7 +182,7 @@ struct	tal {
 /*
  * Files specified in an MFT have their bodies hashed with SHA256.
  */
-struct	mftfile {
+struct mftfile {
 	char		*file; /* filename (CER/ROA/CRL, no path) */
 	unsigned char	 hash[SHA256_DIGEST_LENGTH]; /* sha256 of body */
 };
@@ -183,7 +192,7 @@ struct	mftfile {
  * This consists of a bunch of files found in the same directory as the
  * manifest file.
  */
-struct	mft {
+struct mft {
 	char		*file; /* full path of MFT file */
 	struct mftfile	*files; /* file and hash */
 	size_t		 filesz; /* number of filenames */
@@ -200,7 +209,7 @@ struct	mft {
  * This encodes the maximum length, AFI (v6/v4), and address.
  * FIXME: are the min/max necessary or just used in one place?
  */
-struct	roa_ip {
+struct roa_ip {
 	enum afi	 afi; /* AFI value */
 	size_t		 maxlength; /* max length or zero */
 	unsigned char	 min[16]; /* full range minimum */
@@ -212,7 +221,7 @@ struct	roa_ip {
  * An ROA, RFC 6482.
  * This consists of the concerned ASID and its IP prefixes.
  */
-struct	roa {
+struct roa {
 	uint32_t	 asid; /* asID of ROA (if 0, RFC 6483 sec 4) */
 	struct roa_ip	*ips; /* IP prefixes */
 	size_t		 ipsz; /* number of IP prefixes */
@@ -239,23 +248,44 @@ RB_HEAD(vrp_tree, vrp);
 RB_PROTOTYPE(vrp_tree, vrp, entry, vrpcmp);
 
 /*
+ * A single CRL
+ */
+struct crl {
+	RB_ENTRY(crl)	 entry;
+	char		*aki;
+	X509_CRL	*x509_crl;
+};
+/*
+ * Tree of CRLs sorted by uri
+ */
+RB_HEAD(crl_tree, crl);
+RB_PROTOTYPE(crl_tree, crl, entry, crlcmp);
+
+/*
  * An authentication tuple.
  * This specifies a public key and a subject key identifier used to
  * verify children nodes in the tree of entities.
  */
-struct	auth {
+struct auth {
+	RB_ENTRY(auth)	 entry;
 	struct cert	*cert; /* owner information */
-	size_t		 id; /* self-index */
-	size_t		 parent; /* index of parent pair (or self) */
+	struct auth	*parent; /* pointer to parent or NULL for TA cert */
 	char		*tal; /* basename of TAL for this cert */
 	char		*fn; /* FIXME: debugging */
 };
+/*
+ * Tree of auth sorted by ski
+ */
+RB_HEAD(auth_tree, auth);
+RB_PROTOTYPE(auth_tree, auth, entry, authcmp);
+
+struct auth *auth_find(struct auth_tree *, const char *);
 
 /*
  * Resource types specified by the RPKI profiles.
  * There are others (e.g., gbr) that we don't consider.
  */
-enum	rtype {
+enum rtype {
 	RTYPE_EOF = 0,
 	RTYPE_TAL,
 	RTYPE_MFT,
@@ -264,15 +294,12 @@ enum	rtype {
 	RTYPE_CRL
 };
 
-/* global variables */
-extern int verbose;
-
 /* Routines for RPKI entities. */
 
 void		 tal_buffer(char **, size_t *, size_t *, const struct tal *);
 void		 tal_free(struct tal *);
 struct tal	*tal_parse(const char *, char *);
-char 		*tal_read_file(const char *);
+char		*tal_read_file(const char *);
 struct tal	*tal_read(int);
 
 void		 cert_buffer(char **, size_t *, size_t *, const struct cert *);
@@ -290,15 +317,22 @@ void		 roa_buffer(char **, size_t *, size_t *, const struct roa *);
 void		 roa_free(struct roa *);
 struct roa	*roa_parse(X509 **, const char *, const unsigned char *);
 struct roa	*roa_read(int);
-void		 roa_insert_vrps(struct vrp_tree *, struct roa *, size_t *, size_t *);
+void		 roa_insert_vrps(struct vrp_tree *, struct roa *, size_t *,
+		    size_t *);
 
+/* crl.c */
 X509_CRL	*crl_parse(const char *, const unsigned char *);
+void		 free_crl(struct crl *);
 
 /* Validation of our objects. */
 
-ssize_t		 valid_cert(const char *, const struct auth *, size_t, const struct cert *);
-ssize_t		 valid_roa(const char *, const struct auth *, size_t, const struct roa *);
-ssize_t		 valid_ta(const char *, const struct auth *, size_t, const struct cert *);
+struct auth	*valid_ski_aki(const char *, struct auth_tree *,
+		    const char *, const char *);
+int		 valid_ta(const char *, struct auth_tree *,
+		    const struct cert *);
+int		 valid_cert(const char *, struct auth_tree *,
+		    const struct cert *);
+int		 valid_roa(const char *, struct auth_tree *, struct roa *);
 
 /* Working with CMS files. */
 
@@ -307,12 +341,16 @@ unsigned char	*cms_parse_validate(X509 **, const char *,
 
 /* Work with RFC 3779 IP addresses, prefixes, ranges. */
 
-int		 ip_addr_afi_parse(const char *, const ASN1_OCTET_STRING *, enum afi *);
+int		 ip_addr_afi_parse(const char *, const ASN1_OCTET_STRING *,
+			enum afi *);
 int		 ip_addr_parse(const ASN1_BIT_STRING *,
 			enum afi, const char *, struct ip_addr *);
-void		 ip_addr_print(const struct ip_addr *, enum afi, char *, size_t);
-void		 ip_addr_buffer(char **, size_t *, size_t *, const struct ip_addr *);
-void		 ip_addr_range_buffer(char **, size_t *, size_t *, const struct ip_addr_range *);
+void		 ip_addr_print(const struct ip_addr *, enum afi, char *,
+			size_t);
+void		 ip_addr_buffer(char **, size_t *, size_t *,
+			const struct ip_addr *);
+void		 ip_addr_range_buffer(char **, size_t *, size_t *,
+			const struct ip_addr_range *);
 void		 ip_addr_read(int, struct ip_addr *);
 void		 ip_addr_range_read(int, struct ip_addr_range *);
 int		 ip_addr_cmp(const struct ip_addr *, const struct ip_addr *);
@@ -340,6 +378,8 @@ int		 rsync_uri_parse(const char **, size_t *,
 /* Logging (though really used for OpenSSL errors). */
 
 void log_set_silent(int value);
+void log_set_verbose(int value);
+int log_get_verbose(void);
 void log_warnx(const char *fmt, ...);
 void		 cryptowarnx(const char *, ...)
 			__attribute__((format(printf, 1, 2)));
@@ -351,10 +391,12 @@ void		 cryptoerrx(const char *, ...)
 
 void		 io_socket_blocking(int);
 void		 io_socket_nonblocking(int);
-void		 io_simple_buffer(char **, size_t *, size_t *, const void *, size_t);
+void		 io_simple_buffer(char **, size_t *, size_t *, const void *,
+			size_t);
 void		 io_simple_read(int, void *, size_t);
 void		 io_simple_write(int, const void *, size_t);
-void		 io_buf_buffer(char **, size_t *, size_t *, const void *, size_t);
+void		 io_buf_buffer(char **, size_t *, size_t *, const void *,
+			size_t);
 void		 io_buf_read_alloc(int, void **, size_t *);
 void		 io_buf_write(int, const void *, size_t);
 void		 io_str_buffer(char **, size_t *, size_t *, const char *);
@@ -367,6 +409,9 @@ int			 x509Basic_parse(X509 *, const char *, struct basicCertificate *, int);
 void		 x509Basic_free(struct basicCertificate *);
 char		*x509_get_aki_ext(X509_EXTENSION *, const char *);
 char		*x509_get_ski_ext(X509_EXTENSION *, const char *);
+int		 x509_get_ski_aki(X509 *, const char *, char **, char **);
+char		*x509_get_crl(X509 *, const char *);
+char		*x509_crl_get_aki(X509_CRL *);
 
 /* ASN1 helpers. */
 
@@ -374,9 +419,26 @@ struct tm asn1Time2Time(const ASN1_TIME* time);
 
 /* Output! */
 
-void		 output_bgpd(FILE *, struct vrp_tree *);
-void		 output_bird(FILE *, struct vrp_tree *, const char *);
-void		 output_csv(FILE *, struct vrp_tree *);
-void		 output_json(FILE *, struct vrp_tree *);
+extern int	 outformats;
+#define FORMAT_OPENBGPD	0x01
+#define FORMAT_BIRD	0x02
+#define FORMAT_CSV	0x04
+#define FORMAT_JSON	0x08
+extern char	*outputdir;
+
+int		 outputfiles(struct vrp_tree *v, const char *);
+FILE		*output_createtmp(char *);
+void		 output_cleantmp(void);
+void		 output_finish(FILE *);
+int		 output_bgpd(FILE *, struct vrp_tree *, void *arg);
+int		 output_bird(FILE *, struct vrp_tree *, void *arg);
+int		 output_csv(FILE *, struct vrp_tree *, void *arg);
+int		 output_json(FILE *, struct vrp_tree *, void *arg);
+
+void		 logx(const char *fmt, ...)
+			__attribute__((format(printf, 1, 2)));
+
+#define		RPKI_PATH_OUT_DIR	"/var/db/rpki-client"
+#define		RPKI_PATH_BASE_DIR	"/var/cache/rpki-client"
 
 #endif /* ! EXTERN_H */

@@ -1,4 +1,4 @@
-/*	$OpenBSD: crl.c,v 1.5 2019/08/13 13:27:26 claudio Exp $ */
+/*	$OpenBSD: crl.c,v 1.7 2019/11/29 04:40:04 claudio Exp $ */
 /*
  * Copyright (c) 2019 Kristaps Dzonsons <kristaps@bsd.lv>
  *
@@ -41,7 +41,7 @@ crl_parse(const char *fn, const unsigned char *dgst)
 	char		 mdbuf[EVP_MAX_MD_SIZE];
 
 	if ((bio = BIO_new_file(fn, "rb")) == NULL) {
-		if (verbose > 0)
+		if (log_get_verbose() > 0)
 			cryptowarnx("%s: BIO_new_file", fn);
 		return NULL;
 	}
@@ -83,7 +83,7 @@ crl_parse(const char *fn, const unsigned char *dgst)
 		assert(sz == SHA256_DIGEST_LENGTH);
 
 		if (memcmp(mdbuf, dgst, SHA256_DIGEST_LENGTH)) {
-			if (verbose > 0)
+			if (log_get_verbose() > 0)
 				log_warnx("%s: bad message digest", fn);
 			goto out;
 		}
@@ -99,3 +99,18 @@ out:
 	return x;
 }
 
+static inline int
+crlcmp(struct crl *a, struct crl *b)
+{
+	return strcmp(a->aki, b->aki);
+}
+
+RB_GENERATE(crl_tree, crl, entry, crlcmp);
+
+void
+free_crl(struct crl *crl)
+{
+	free(crl->aki);
+	X509_CRL_free(crl->x509_crl);
+	free(crl);
+}

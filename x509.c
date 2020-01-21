@@ -26,7 +26,9 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <openssl/asn1.h>
 #include <openssl/ssl.h>
+#include <openssl/x509v3.h>
 
 #include "extern.h"
 
@@ -104,7 +106,7 @@ x509_get_aki_ext(X509_EXTENSION *ext, const char *fn)
 	/* Make room for [hex1, hex2, ":"]*, NUL. */
 
 	if ((res = calloc(plen * 3 + 1, 1)) == NULL)
-		err(EXIT_FAILURE, NULL);
+		err(1, NULL);
 
 	for (i = 0; i < plen; i++) {
 		snprintf(buf, sizeof(buf), "%02X:", d[i]);
@@ -157,7 +159,7 @@ x509_get_ski_ext(X509_EXTENSION *ext, const char *fn)
 	/* Make room for [hex1, hex2, ":"]*, NUL. */
 
 	if ((res = calloc(dsz * 3 + 1, 1)) == NULL)
-		err(EXIT_FAILURE, NULL);
+		err(1, NULL);
 
 	for (i = 0; i < dsz; i++) {
 		snprintf(buf, sizeof(buf), "%02X:", d[i]);
@@ -503,4 +505,135 @@ void x509Basic_free(struct basicCertificate *cert) {
 			free(cert->eeLocation);
 		}
     }
+}
+
+/*
+ * Wraps around x509_get_ski_ext and x509_get_aki_ext.
+ * Returns zero on failure (out pointers are NULL) or non-zero on
+ * success (out pointers must be freed).
+ */
+int
+x509_get_ski_aki(X509 *x, const char *fn, char **ski, char **aki)
+{
+	X509_EXTENSION		*ext = NULL;
+	const ASN1_OBJECT	*obj;
+	int			 extsz, i;
+
+	*ski = *aki = NULL;
+
+	if ((extsz = X509_get_ext_count(x)) < 0)
+		cryptoerrx("X509_get_ext_count");
+
+	for (i = 0; i < extsz; i++) {
+		ext = X509_get_ext(x, i);
+		assert(ext != NULL);
+		obj = X509_EXTENSION_get_object(ext);
+		assert(obj != NULL);
+		switch (OBJ_obj2nid(obj)) {
+		case NID_subject_key_identifier:
+			free(*ski);
+			*ski = x509_get_ski_ext(ext, fn);
+			break;
+		case NID_authority_key_identifier:
+			free(*aki);
+			*aki = x509_get_aki_ext(ext, fn);
+			break;
+		}
+	}
+
+	if (*aki == NULL) {
+		cryptowarnx("%s: RFC 6487 section 4.8.3: AKI: "
+		    "missing AKI X509 extension", fn);
+		free(*ski);
+		*ski = NULL;
+		return 0;
+	}
+	if (*ski == NULL) {
+		cryptowarnx("%s: RFC 6487 section 4.8.2: AKI: "
+		    "missing SKI X509 extension", fn);
+		free(*aki);
+		*aki = NULL;
+		return 0;
+	}
+
+	return 1;
+}
+
+/*
+ * Parse the very specific subset of information in the CRL distribution
+ * point extension.
+ * See RFC 6487, sectoin 4.8.6 for details.
+ * Returns NULL on failure, the crl URI on success which has to be freed
+ * after use.
+ */
+char *
+x509_get_crl(X509 *x, const char *fn)
+{
+	STACK_OF(DIST_POINT)	*crldp;
+	DIST_POINT		*dp;
+	GENERAL_NAME		*name;
+	char			*crl;
+
+	crldp = X509_get_ext_d2i(x, NID_crl_distribution_points, NULL, NULL);
+	if (crldp == NULL) {
+		log_warnx("%s: RFC 6487 section 4.8.6: CRL: "
+		    "no CRL distribution point extension", fn);
+		return NULL;
+	}
+
+	if (sk_DIST_POINT_num(crldp) != 1) {
+		log_warnx("%s: RFC 6487 section 4.8.6: CRL: "
+		    "want 1 element, have %d", fn,
+		    sk_DIST_POINT_num(crldp));
+		return NULL;
+	}
+
+	dp = sk_DIST_POINT_value(crldp, 0);
+	if (dp->distpoint == NULL) {
+		log_warnx("%s: RFC 6487 section 4.8.6: CRL: "
+		    "no distribution point name", fn);
+		return NULL;
+	}
+	if (dp->distpoint->type != 0) {
+		log_warnx("%s: RFC 6487 section 4.8.6: CRL: "
+		    "expected GEN_OTHERNAME, have %d", fn, dp->distpoint->type);
+		return NULL;
+	}
+
+	if (sk_GENERAL_NAME_num(dp->distpoint->name.fullname) != 1) {
+		log_warnx("%s: RFC 6487 section 4.8.6: CRL: "
+		    "want 1 full name, have %d", fn,
+		    sk_GENERAL_NAME_num(dp->distpoint->name.fullname));
+		return NULL;
+	}
+
+	name = sk_GENERAL_NAME_value(dp->distpoint->name.fullname, 0);
+	if (name->type != GEN_URI) {
+		log_warnx("%s: RFC 6487 section 4.8.6: CRL: "
+		    "want URI type, have %d", fn, name->type);
+		return NULL;
+	}
+
+	crl = strndup(ASN1_STRING_get0_data(name->d.uniformResourceIdentifier),
+	    ASN1_STRING_length(name->d.uniformResourceIdentifier));
+	if (crl == NULL)
+		err(1, NULL);
+
+	return crl;
+}
+
+char *
+x509_crl_get_aki(X509_CRL *crl)
+{
+	X509_EXTENSION *ext;
+	int loc;
+
+	loc = X509_CRL_get_ext_by_NID(crl, NID_authority_key_identifier, -1);
+	if (loc == -1) {
+		log_warnx("%s: CRL without AKI extension", __func__);
+		return NULL;
+	}
+	ext = X509_CRL_get_ext(crl, loc);
+
+	return x509_get_aki_ext(ext, "x509_crl_get_aki");
 }

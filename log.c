@@ -1,4 +1,4 @@
-/*	$OpenBSD: log.c,v 1.4 2019/06/19 16:30:37 deraadt Exp $ */
+/*	$OpenBSD: log.c,v 1.5 2019/11/29 05:14:11 benno Exp $ */
 /*
  * Copyright (c) 2019 Kristaps Dzonsons <kristaps@bsd.lv>
  *
@@ -27,10 +27,37 @@
 #include "extern.h"
 
 static int silent = 0; // When enabled, do not print messages, neither exit()
+static int verbose = 0; // For logx output
+
+void log_set_verbose(int value)
+{
+	verbose = (value) ? 1 : 0;
+}
+
+int log_get_verbose(void)
+{
+	return verbose;
+}
 
 void log_set_silent(int value)
 {
 	silent = (value) ? 1 : 0;
+}
+
+/*
+ * Log a message to stderr if and only if "verbose" is non-zero.
+ * This uses the err(3) functionality.
+ */
+void
+logx(const char *fmt, ...)
+{
+	va_list		 ap;
+
+	if (verbose && fmt != NULL) {
+		va_start(ap, fmt);
+		vwarnx(fmt, ap);
+		va_end(ap);
+	}
 }
 
 void log_warnx(const char *fmt, ...)
@@ -68,7 +95,7 @@ cryptoerrx(const char *fmt, ...)
 		va_end(ap);
 	}
 
-	exit(EXIT_FAILURE);
+	exit(1);
 }
 
 /*

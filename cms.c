@@ -1,4 +1,4 @@
-/*	$OpenBSD: cms.c,v 1.5 2019/08/13 13:27:26 claudio Exp $ */
+/*	$OpenBSD: cms.c,v 1.6 2019/11/29 05:14:11 benno Exp $ */
 /*
  * Copyright (c) 2019 Kristaps Dzonsons <kristaps@bsd.lv>
  *
@@ -58,7 +58,7 @@ cms_parse_validate(X509 **xp, const char *fn,
 	 */
 
 	if ((bio = BIO_new_file(fn, "rb")) == NULL) {
-		if (verbose > 0)
+		if (log_get_verbose() > 0)
 			cryptowarnx("%s: BIO_new_file", fn);
 		return NULL;
 	}
@@ -162,7 +162,7 @@ cms_parse_validate(X509 **xp, const char *fn,
 	 */
 
 	if ((res = malloc((*os)->length)) == NULL)
-		err(EXIT_FAILURE, NULL);
+		err(1, NULL);
 	memcpy(res, (*os)->data, (*os)->length);
 	*rsz = (*os)->length;
 

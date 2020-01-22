@@ -163,12 +163,6 @@ static void	build_chain(const struct auth *, STACK_OF(X509) **);
 static void	build_crls(const struct auth *, struct crl_tree *,
 		    STACK_OF(X509_CRL) **);
 
-enum output_fmt {
-	BGPD,
-	BIRD,
-	CSV,
-	JSON
-};
 
 /*
  * Resolve the media type of a resource by looking at its suffice.

@@ -65,7 +65,7 @@ else
 	LDADD += /usr/local/lib/eopenssl/libssl.a /usr/local/lib/eopenssl/libcrypto.a
 endif
 
-all: $(BINS)
+all: $(BINS) rpki-client.install.8
 
 site.h: Makefile
 	@(echo "#define RPKI_RSYNC_COMMAND \"${RPKI_RSYNC_COMMAND}\"" ; \
@@ -99,9 +99,12 @@ test-%: test-%.o $(OBJS)
 	$(CC) -o $@ $^ $(LDFLAGS) $(LDADD)
 
 clean:
-	rm -f $(BINS) $(ALLOBJS) site.sed site.h
+	rm -f $(BINS) $(ALLOBJS) rpki-client.install.8 site.sed site.h
 
 distclean: clean
 	rm -f config.h config.log Makefile.configure
 
 $(ALLOBJS): extern.h config.h site.h
+
+rpki-client.install.8: rpki-client.8 site.sed
+	sed -f site.sed rpki-client.8 >$@

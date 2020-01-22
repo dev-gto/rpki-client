@@ -3,7 +3,8 @@
 **This system has been merged into OpenBSD base.  If you'd like to
 contribute to rpki-client, please mail your patches to tech@openbsd.org.
 This repository is simply the OpenBSD version plus some glue for
-portability.**
+portability.  It is updated from time to time to keep in sync with
+OpenBSD's version.**
 
 **rpki-client** is an implementation of RPKI (resource public key
 infrastructure) described in [RFC
@@ -18,7 +19,8 @@ statements and omits superfluities (such as, for example, which X509
 certificate sections must be labelled "Critical").
 
 The system runs on modern UNIX operating systems with the the
-[OpenSSL](https://www.openssl.org) external library installed.
+[OpenSSL](https://www.openssl.org) external library installed, version
+1.1 and above.
 See [Portability](#portability) for details.
 The reference operating system is [OpenBSD](https://www.openbsd.org),
 which we strongly suggest for all installations for security reasons.
@@ -42,10 +44,9 @@ It was funded by [NetNod](https://www.netnod.se),
 # Installation
 
 First, you'll need a recent [OpenSSL](https://www.openssl.org/) library
-on your operating system.
-At this point, just run the following.
-The installation rule will install into `PREFIX`, defaulting to
-*/usr/local*.
+(version 1.1 and above) on your operating system.  At this point, just
+run the following.  The installation rule will install into `PREFIX`,
+defaulting to */usr/local*.
 
 ```
 % ./configure
@@ -53,24 +54,68 @@ The installation rule will install into `PREFIX`, defaulting to
 # make install
 ```
 
-Linux installations will need to uncomment the [Makefile](Makfile)
-components following the `Linux` comment.  For OpenBSD, those following
-`OpenBSD`.  FreeBSD should work without modification (untested).
+It may be necessary to pass `pkg-config` values for OpenSSL to the
+configure script.
+
+```
+% ./configure CPPFLAGS="`pkg-config --cflags openssl`" \
+> LDFLAGS="`pkg-config --libs-only-L openssl`" \
+> LDADD="`pkg-config --libs-only-l openssl`"
+```
+
+On OpenBSD, the package is `eopenssl11`, but using `pkg-config` for this
+will produce the wrong values for OpenBSD 6.6 and before.  You'll need
+to hardcode the values yourself.  On FreeBSD, you'll need to install
+both the `openssl111` and `pkgconf` packages.
+
+If you're packaging the software, these may be put directly into a
+*configure.local* script, which overrides the variables during
+configuration.  For example:
+
+```
+CPPFLAGS="`pkg-config --cflags openssl`"
+# FreeBSD's make(1) doesn't respect CPPFLAGS.
+# CFLAGS="${CFLAGS} `pkg-config --cflags openssl`"
+LDFLAGS="`pkg-config --libs-only-L openssl`"
+LDADD="`pkg-config --libs-only-l openssl`"
+```
+
+Most Linux systems additionally need `-lresolv` for `LDADD`.
 
 Next, you'll need the */var/cache/rpki-client* directory in place.
-It must be writable by the operator of **rpki-client**.
+It must be writable by the operator of **rpki-client**.  The default
+output directory is */var/db/rpki-client*, which must also be writable
+(if not overriden).
 
 You'll also need TAL ("trust anchor locator") files.
 There are some in the [tals](tals) directory of this system, but you can
 download them on your own.
+For default operation, load these into */etc/rpki*.
 
-To run **rpki-client**, just point it at your TAL files.
-You'll also need the [openrsync(1)](https://man.openbsd.org/openrsync.1)
-(or [rsync](https://rsync.samba.org/), which may be specified with the
-**-e** argument) executable installed.
+These default paths are set as
+`RPKI_PATH_BASE_DIR`, `RPKI_PATH_OUT_DIR`, and `RPKI_TAL_DIR`,
+respectively, in the
+[Makefile](https://github.com/kristapsdz/rpki-client/blob/master/Makefile).
+Alternatively, override the variables when invoking `make`, e.g.,
 
 ```
-% ./rpki-client -v ./tals/*.tal > bgpd-rpki.conf
+% make RPKI_TAL_DIR=/etc/tals
+```
+
+You'll also need [openrsync(1)](https://man.openbsd.org/openrsync.1) or
+[rsync](https://rsync.samba.org/) as specified with the **-e** argument.
+To hardcode an alternate rsync implementation, set the
+`RPKI_RSYNC_PROGRAM` value in the
+[Makefile](https://github.com/kristapsdz/rpki-client/blob/master/Makefile).
+
+In the following, the first uses a custom TAL file, while the second
+loads all TAL files from their default location.  Output for the first
+is written into *./openbgpd* and */var/db/rpki-client/openbgpd* for the
+second.
+
+```
+% ./rpki-client -v -t sometal.tal .
+% ./rpki-client -v
 ```
 
 If you later want to uninstall the system, simply run
@@ -123,9 +168,9 @@ repository is fetched or refreshed.
 When the repository is fetched, those pending entries are flushed into
 the parser.
 
-The master process also outputs valid routes.
-At this time, it does so only in the
-[bgpd.conf(5)](https://man.openbsd.org/bgpd.conf.5) format.
+The master process also outputs valid routes.  At this time, it does so
+in [bgpd.conf(5)](https://man.openbsd.org/bgpd.conf.5),
+[BIRD](https://bird.network.cz), RIPE NCC RPKI JSON, or CSV formats.
 
 ## Future security
 
@@ -269,14 +314,13 @@ performed in [validate.c](validate.c).
 OpenSSL's `X509_STORE` functionality.
 
 Some repositories, however, contain enormous CRL files with thousands
-and thousands of entries.
-Since these take quite some time to parse, the **-r** flag disables CRL
-checking.
+and thousands of entries.  These take quite some time to parse.
 
 # Portability
 
 The **rpki-client** is portable to the extent that it will compile and
 run on most modern UNIX systems.
+To date it is known to compile on GNU/Linux, FreeBSD, and OpenBSD.
 It uses [oconfigure](https://github.com/kristapsdz/oconfigure) for its
 compatibility layer.
 
@@ -285,6 +329,17 @@ However, the system depends heavily on OpenBSD's security mechanisms
 untrusted content.
 Those running on a non-OpenBSD operating system should be aware that
 this additional protection is not available.
+
+## Privilege dropping
+
+If the `RPKI_PRIVDROP` macro evaluates to 1 as set in the
+[Makefile](https://github.com/kristapsdz/rpki-client/blob/master/Makefile),
+the `RPKI_PRIVDROP_USER` is used as the username into which to
+privilege-drop.
+On OpenBSD, this is *_rpki-client*.
+Privilege dropping only occurs when running the utility as root.
+
+If `RPKI_PRIVDROP` is set to 0, no privilege dropping occurs.
 
 ## Pledge
 

@@ -45,7 +45,6 @@
 int
 ip_addr_afi_parse(const char *fn, const ASN1_OCTET_STRING *p, enum afi *afi)
 {
-	char	 buf[2];
 	short	 v;
 
 	if (p->length == 0 || p->length > 3) {
@@ -54,8 +53,7 @@ ip_addr_afi_parse(const char *fn, const ASN1_OCTET_STRING *p, enum afi *afi)
 		return 0;
 	}
 
-	memcpy(buf, p->data, sizeof(uint16_t));
-	v = ntohs(*(uint16_t *)buf);
+	v = ntohs((p->data[1] << 8) | p->data[0]);
 
 	/* Only accept IPv4 and IPv6 AFIs. */
 

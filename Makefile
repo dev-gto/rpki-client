@@ -58,7 +58,7 @@ ARCH=$(shell uname -s|tr A-Z a-z)
 ifeq ($(ARCH), linux)
 	# Linux.
 	LDADD += `pkg-config --libs openssl` -lresolv 
-	CFLAGS += `pkg-config --cflags openssl` -Wno-discarded-qualifiers -Wno-pointer-sign -D_LINUX 
+	CFLAGS += -Wno-discarded-qualifiers -Wno-pointer-sign -fPIC `pkg-config --cflags openssl` -D_LINUX
 else
 	# OpenBSD.
 	CFLAGS += -I/usr/local/include/eopenssl -Wno-incompatible-pointer-types-discards-qualifiers

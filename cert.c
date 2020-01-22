@@ -1248,8 +1248,14 @@ cert_parse_inner(X509 **xp, const char *fn, const unsigned char *dgst, int ta)
 			goto out;
 	}
 
-	if (!ta)
-		p.res->crl = x509_get_crl(x, p.fn);
+	if (!ta) {
+		char *crl;
+		crl = x509_get_crl(x, p.fn);
+		if (crl != NULL) {
+			free(p.res->crl);
+			p.res->crl = crl;
+		}
+	}
 
 	/* Validation on required fields. */
 
@@ -1367,6 +1373,7 @@ cert_free(struct cert *p)
 		return;
 
 	x509Basic_free(&p->basic);
+	free(p->rep);
 	free(p->crl);
 	free(p->mft);
 	free(p->ips);

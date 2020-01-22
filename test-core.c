@@ -154,6 +154,7 @@ void print_crl (X509_CRL *p)
 	char *issuerName;
 	time_t now;
 	struct tm tm;
+	ASN1_INTEGER *n;
 	STACK_OF(X509_REVOKED) *revoked;
 
 	assert(p != NULL);
@@ -172,7 +173,12 @@ void print_crl (X509_CRL *p)
 	printf("%*.*s: %s\n", TAB, TAB, "Now", caNow);
 	print_sep_line("Certificate Revocation List");
 	printf("%*.*s: %ld\n", TAB, TAB, "Version", X509_CRL_get_version(p) + 1);
-	printf("%*.*s: %ld\n", TAB, TAB, "CRL Number", ASN1_INTEGER_get(X509_CRL_get_ext_d2i(p,NID_crl_number,NULL,NULL)));
+
+	n = X509_CRL_get_ext_d2i(p,NID_crl_number,NULL,NULL);
+	if (n != NULL) {
+		printf("%*.*s: %ld\n", TAB, TAB, "CRL Number", ASN1_INTEGER_get(n));
+		ASN1_INTEGER_free(n);
+	}
 
 	issuerName = X509_NAME_oneline(X509_CRL_get_issuer(p), NULL, 0);
 	if (issuerName != NULL) {

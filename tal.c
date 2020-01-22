@@ -305,8 +305,10 @@ tal_read_file(const char *file)
 	}
 
 	free(line);
-	if (ferror(in))
+	if (ferror(in)) {
+		fclose(in);
 		err(1, "getline: %s", file);
+	}
 	fclose(in);
 	if (buf == NULL)
 		errx(1, "%s: no data", file);

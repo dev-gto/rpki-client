@@ -572,52 +572,56 @@ x509_get_crl(X509 *x, const char *fn)
 	STACK_OF(DIST_POINT)	*crldp;
 	DIST_POINT		*dp;
 	GENERAL_NAME		*name;
-	char			*crl;
+	char			*crl = NULL;
 
 	crldp = X509_get_ext_d2i(x, NID_crl_distribution_points, NULL, NULL);
 	if (crldp == NULL) {
 		log_warnx("%s: RFC 6487 section 4.8.6: CRL: "
-		    "no CRL distribution point extension", fn);
+			"no CRL distribution point extension", fn);
 		return NULL;
 	}
 
-	if (sk_DIST_POINT_num(crldp) != 1) {
-		log_warnx("%s: RFC 6487 section 4.8.6: CRL: "
-		    "want 1 element, have %d", fn,
-		    sk_DIST_POINT_num(crldp));
-		return NULL;
-	}
+	while (1) {
+		if (sk_DIST_POINT_num(crldp) != 1) {
+			log_warnx("%s: RFC 6487 section 4.8.6: CRL: "
+				"want 1 element, have %d", fn,
+				sk_DIST_POINT_num(crldp));
+			break;
+		}
 
-	dp = sk_DIST_POINT_value(crldp, 0);
-	if (dp->distpoint == NULL) {
-		log_warnx("%s: RFC 6487 section 4.8.6: CRL: "
-		    "no distribution point name", fn);
-		return NULL;
-	}
-	if (dp->distpoint->type != 0) {
-		log_warnx("%s: RFC 6487 section 4.8.6: CRL: "
-		    "expected GEN_OTHERNAME, have %d", fn, dp->distpoint->type);
-		return NULL;
-	}
+		dp = sk_DIST_POINT_value(crldp, 0);
+		if (dp->distpoint == NULL) {
+			log_warnx("%s: RFC 6487 section 4.8.6: CRL: "
+				"no distribution point name", fn);
+			break;
+		}
+		if (dp->distpoint->type != 0) {
+			log_warnx("%s: RFC 6487 section 4.8.6: CRL: "
+				"expected GEN_OTHERNAME, have %d", fn, dp->distpoint->type);
+			break;
+		}
 
-	if (sk_GENERAL_NAME_num(dp->distpoint->name.fullname) != 1) {
-		log_warnx("%s: RFC 6487 section 4.8.6: CRL: "
-		    "want 1 full name, have %d", fn,
-		    sk_GENERAL_NAME_num(dp->distpoint->name.fullname));
-		return NULL;
-	}
+		if (sk_GENERAL_NAME_num(dp->distpoint->name.fullname) != 1) {
+			log_warnx("%s: RFC 6487 section 4.8.6: CRL: "
+				"want 1 full name, have %d", fn,
+				sk_GENERAL_NAME_num(dp->distpoint->name.fullname));
+			break;
+		}
 
-	name = sk_GENERAL_NAME_value(dp->distpoint->name.fullname, 0);
-	if (name->type != GEN_URI) {
-		log_warnx("%s: RFC 6487 section 4.8.6: CRL: "
-		    "want URI type, have %d", fn, name->type);
-		return NULL;
-	}
+		name = sk_GENERAL_NAME_value(dp->distpoint->name.fullname, 0);
+		if (name->type != GEN_URI) {
+			log_warnx("%s: RFC 6487 section 4.8.6: CRL: "
+				"want URI type, have %d", fn, name->type);
+			break;
+		}
 
-	crl = strndup(ASN1_STRING_get0_data(name->d.uniformResourceIdentifier),
-	    ASN1_STRING_length(name->d.uniformResourceIdentifier));
-	if (crl == NULL)
-		err(1, NULL);
+		crl = strndup(ASN1_STRING_get0_data(name->d.uniformResourceIdentifier),
+			ASN1_STRING_length(name->d.uniformResourceIdentifier));
+		if (crl == NULL)
+			err(1, NULL);
+		break;
+	}
+	CRL_DIST_POINTS_free(crldp);
 
 	return crl;
 }

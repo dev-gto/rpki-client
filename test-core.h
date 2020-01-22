@@ -19,6 +19,18 @@
 
 #include <stdlib.h>
 
+typedef struct _filename{
+	char *filename;
+} FILEENTRY;
+
+DEFINE_STACK_OF(FILEENTRY)
+DECLARE_ASN1_ALLOC_FUNCTIONS(FILEENTRY)
+
+typedef struct Session
+{
+	STACK_OF(FILEENTRY) *filenames;
+} *HSESSION;
+
 void hex_encode (unsigned char *lpcAsc, unsigned char *lpcBcd, size_t szBcd);
 
 void print_cert(const struct cert *p);
@@ -26,6 +38,9 @@ void print_crl(X509_CRL *p);
 void print_mft(const struct mft *p);
 void print_roa(const struct roa *p);
 void print_tal(const struct tal *p);
+
+void sessionInit (HSESSION hSession);
+int sessionFree (HSESSION hSession, int iRtn);
 
 struct tal	*tal_parse_from_file(const char *fn);
 

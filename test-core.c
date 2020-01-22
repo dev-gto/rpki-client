@@ -26,6 +26,9 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <memory.h>
+#include <openssl/asn1.h>
+#include <openssl/err.h>
+#include <openssl/safestack.h>
 #include <openssl/ssl.h>
 
 #include "extern.h"
@@ -49,6 +52,37 @@ void hex_encode (unsigned char *lpcAsc, unsigned char *lpcBcd, size_t szBcd)
 		*lpcAsc++ = ToAsc (lpcBcd[i] >> 4);
 		*lpcAsc++ = ToAsc (lpcBcd[i]);
 	}
+}
+
+FILEENTRY* FILEENTRY_new() {
+	return malloc(sizeof(FILEENTRY));
+}
+
+void FILEENTRY_free(FILEENTRY *entry) {
+	if (entry != NULL) {
+		free(entry->filename);
+		free(entry);
+	}
+}
+
+void sessionInit (HSESSION hSession) {
+	SSL_library_init();
+	SSL_load_error_strings();
+	if (hSession != NULL) {
+		memset (hSession, 0, sizeof (struct Session));
+		hSession->filenames = sk_FILEENTRY_new_null();
+	}
+}
+
+int sessionFree (HSESSION hSession, int iRtn) {
+	sk_FILEENTRY_pop_free(hSession->filenames, FILEENTRY_free);
+
+	EVP_cleanup();
+	CRYPTO_cleanup_all_ex_data();
+	ERR_remove_thread_state(NULL);
+	ERR_free_strings();
+
+	return iRtn;
 }
 
 static void print_sep_line (const char *title)

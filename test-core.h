@@ -18,30 +18,53 @@
 #define TEST_CORE_H
 
 #include <stdlib.h>
+#include <openssl/safestack.h>
+#include "extern.h"
+#include "hash.h"
 
-typedef struct _filename{
-	char *filename;
-} FILEENTRY;
+#define OPT_OUTPUT_TEXT 0
+#define OPT_OUTPUT_JS_MONITOR 1
 
-DEFINE_STACK_OF(FILEENTRY)
-DECLARE_ASN1_ALLOC_FUNCTIONS(FILEENTRY)
+typedef struct {
+    int iCode;
+    char *lpcDescription;
+    char *lpcReceived;
+    char *lpcReference;
+} Error;
+
+typedef struct {
+	char *lpcFilename;              // Filename to be processed
+} FileEntry;
+DEFINE_STACK_OF(FileEntry)
+FileEntry* FileEntry_new(void);
+void FileEntry_free(FileEntry *entry);
 
 typedef struct Session
 {
-	STACK_OF(FILEENTRY) *filenames;
+    int iOptRecursive;              // 1 - navigate through the internal file references
+    int iOptOutput;                 // One of OPT_OUTPUT_*
+    int iNumErrorsFound;
+    char *lpcLocalRepository;       // Base directory for using with iOptRecursive
+    char *lpcCurrentFilename;       // Current file being processed
+	STACK_OF(FileEntry) *filenames; // List of filenames to process (index zero record to be processed first)
+    HHASH hASNs;                    // Hash key: certificate SKI; value: string of asns
+    HHASH hHostnames;               // Cache of valid hostnames. Hash key: hostname; value: 1 - valid; 2 - invalid
 } *HSESSION;
 
 void hex_encode (unsigned char *lpcAsc, unsigned char *lpcBcd, size_t szBcd);
 
-void print_cert(const struct cert *p);
-void print_crl(X509_CRL *p);
-void print_mft(const struct mft *p);
-void print_roa(const struct roa *p);
-void print_tal(const struct tal *p);
+void print_cert(HSESSION hSession, const struct cert *p);
+void print_crl(HSESSION hSession, X509_CRL *p);
+void print_mft(HSESSION hSession, const struct mft *p);
+void print_roa(HSESSION hSession, const struct roa *p);
+void print_tal(HSESSION hSession, const struct tal *p);
 
 void sessionInit (HSESSION hSession);
 int sessionFree (HSESSION hSession, int iRtn);
 
 struct tal	*tal_parse_from_file(const char *fn);
+
+void jsMonitor(HSESSION hSession);
+void txtDump(HSESSION hSession);
 
 #endif

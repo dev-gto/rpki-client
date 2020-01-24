@@ -32,24 +32,45 @@
 #define APP_NAME "test-rpki"
 #define APP_VERSION "1.0.0.0"
 
-static void usage(int iInvalidOption) {
+#define STS_OK                       0
+#define STS_ERROR_MISSING_PARAMS     1
+#define STS_ERROR_NO_INPUT_FILES     2
+#define STS_ERROR_INVALID_DIRECTORY  3
+
+static void usage(int iSts) {
     printf("%s %s - dump information from .cer, .crl, .mft, .roa and .tal files.\n", APP_NAME, APP_VERSION);
-    if (iInvalidOption)
-      printf("Invalid option.\n");
+	switch (iSts) {
+		case STS_ERROR_MISSING_PARAMS:
+			printf("Missing parameters.\n");
+			break;
+		case STS_ERROR_NO_INPUT_FILES:
+			printf("No input files.\n");
+			break;
+		case STS_ERROR_INVALID_DIRECTORY:
+			printf("Invalid directory.\n");
+			break;
+		default:
+			printf("Invalid option.\n");
+	}
     printf("Usage: %s [options] <files>\n\n"
-           "  -h, --help  Displays this help text.\n"
-           "  -r          Recursive. Follows internal file references.\n"
+           "  -h, --help                     Displays this help text.\n"
+           "  -r, --recursive                Recursive. Follows internal file references.\n"
+		   "  -f <format>                    Format output"
+		   "                                    TEXT    - default\n"
+		   "                                    MONITOR - JSON format containing only\n"
+		   "  --local-repository <directory> Directory where the repository local cache will be read"
 		   , APP_NAME
 		   );
 }
 
 static int loadArguments(HSESSION hSession, int argc, char *argv [ ]) {
 	int iargv;
-	int iInvalidOption;
+	int iSts;
 	int iShowUsage;
+	char *lpcValue;
 	struct stat st;
 
-	iInvalidOption = 0;
+	iSts = STS_OK;
 	iShowUsage = 0;
 	for (iargv = 1; (iargv < argc); iargv++)
 	{
@@ -58,10 +79,10 @@ static int loadArguments(HSESSION hSession, int argc, char *argv [ ]) {
 			// Check if is a valid file
 			if (stat (argv[iargv], &st) == 0) {
 				if (S_ISREG(st.st_mode) || S_ISLNK(st.st_mode)) {
-					FILEENTRY *entry;
-					entry = FILEENTRY_new();
-					entry->filename = strdup(argv[iargv]);
-					sk_FILEENTRY_push(hSession->filenames, entry);
+					FileEntry *entry;
+					entry = FileEntry_new();
+					entry->lpcFilename = strdup(argv[iargv]);
+					sk_FileEntry_push(hSession->filenames, entry);
 				}
 			}
 			continue;
@@ -71,93 +92,55 @@ static int loadArguments(HSESSION hSession, int argc, char *argv [ ]) {
 			iShowUsage = 1;
 			break;
 		}
-	}
-
-	if (sk_FILEENTRY_num(hSession->filenames) <= 0) {
-		iShowUsage = 1;
-	}
-
-	if (iShowUsage || iInvalidOption) {
-		usage(iInvalidOption);
-	}
-	return iInvalidOption;
-}
-
-static void processFile(HSESSION hSession, char *filename) {
-	size_t		 sz;
-	struct cert	*cert;
-	struct mft	*mft;
-	struct roa	*roa;
-	struct tal	*tal;
-	X509_CRL	*crl;
-	X509		*xp = NULL;
-
-	sz = strlen(filename);
-	printf("Processing [%s]:\n", filename);
-	if (strcasecmp(filename + sz - 4, ".mft") == 0) {
-		if ((mft = mft_parse(&xp, filename, 1)) != NULL) {
-			print_mft(mft);
-			mft_free(mft);
+		if (strcmp (argv[iargv], "-r") == 0 || strcmp (argv[iargv], "--recursive") == 0)
+		{
+			hSession->iOptRecursive = 1;
+			continue;
 		}
-	}
-	else if (strcasecmp(filename + sz - 4, ".roa") == 0) {
-		if ((roa = roa_parse(&xp, filename, NULL)) != NULL) {
-			print_roa(roa);
-			roa_free(roa);
-		}
-	}
-	else if (strcasecmp(filename + sz - 4, ".crl") == 0) {
-		if ((crl = crl_parse(filename, NULL)) != NULL) {
-			print_crl(crl);
-			X509_CRL_free(crl);
-		}
-	}
-	else if (strcasecmp(filename + sz - 4, ".tal") == 0) {
-		if ((tal = tal_parse_from_file(filename)) != NULL) {
-			print_tal(tal);
-			tal_free(tal);
-		}
-	}
-	else {
-		log_set_silent(1);
-		// Try checking a TA cert
-		cert = ta_parse(&xp, filename, NULL, 0);
-		log_set_silent(0);
-		if (cert != NULL) {
-			print_cert(cert);
-			cert_free(cert);
-		} else {
-			log_set_silent(1);
-			cert = cert_parse(&xp, filename, NULL);
-			log_set_silent(0);
-			if (cert != NULL) {
-				print_cert(cert);
-				cert_free(cert);
-			}
-			else {
+
+		if (memcmp (argv[iargv], "-f", 2) == 0)
+		{
+			lpcValue = &argv[iargv][2];
+			if (!*lpcValue)
+				lpcValue = argv[++iargv];
+			if (lpcValue != NULL && strcmp (lpcValue, "MONITOR") == 0) {
+				hSession->iOptOutput = OPT_OUTPUT_JS_MONITOR;
+				hSession->iOptRecursive = 1;
 				log_set_silent(1);
-				// Try checking a TAL
-				tal = tal_parse_from_file(filename);
-				log_set_silent(0);
-				if (tal != NULL) {
-					print_tal(tal);
-					tal_free(tal);
+			}
+			continue;
+		}		
+		if (memcmp (argv[iargv], "--local-repository", 18) == 0)
+		{
+			lpcValue = &argv[iargv][18];
+			if (!*lpcValue)
+				lpcValue = argv[++iargv];
+			if (lpcValue != NULL) {
+				if (stat (lpcValue, &st) == 0 && S_ISDIR(st.st_mode)) {
+					hSession->lpcLocalRepository = lpcValue;
 				}
 				else {
-					log_warnx("Unrecognized file [%s]", filename);
+					iSts = STS_ERROR_INVALID_DIRECTORY;
+					break;
 				}
 			}
+
+			continue;
+		}
+	}
+	if (iSts == STS_OK) {
+		if (sk_FileEntry_num(hSession->filenames) <= 0) {
+			iSts = STS_ERROR_NO_INPUT_FILES;
 		}
 	}
 
-	if (xp != NULL) {
-		X509_free(xp);
-		xp = NULL;
+	if (iShowUsage || iSts) {
+		usage(iSts);
 	}
+	return iSts;
 }
 
-int
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
 	struct Session sSession;
 	HSESSION hSession = &sSession;
@@ -167,11 +150,11 @@ main(int argc, char *argv[])
 	if (loadArguments(hSession, argc, argv) != 0)
 		return sessionFree(hSession, 4);
 
-	while (sk_FILEENTRY_num(hSession->filenames) > 0) {
-		FILEENTRY *t = sk_FILEENTRY_value(hSession->filenames, 0);
-		processFile(hSession, t->filename);
-		sk_FILEENTRY_delete(hSession->filenames, 0);
-		FILEENTRY_free(t);
+	if (hSession->iOptOutput == OPT_OUTPUT_JS_MONITOR) {
+		jsMonitor(hSession);
+	}
+	else {
+		txtDump(hSession);
 	}
 
 	return sessionFree (hSession, EXIT_SUCCESS);

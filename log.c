@@ -44,6 +44,11 @@ void log_set_silent(int value)
 	silent = (value) ? 1 : 0;
 }
 
+int log_get_silent(void)
+{
+	return silent;
+}
+
 /*
  * Log a message to stderr if and only if "verbose" is non-zero.
  * This uses the err(3) functionality.

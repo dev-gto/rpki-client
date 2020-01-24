@@ -35,9 +35,10 @@ main(int argc, char *argv[])
 	int		 c;
 	struct tal	*tal;
 	size_t		 i;
+	struct Session sSession;
+	HSESSION hSession = &sSession;
 
-	SSL_library_init();
-	SSL_load_error_strings();
+	sessionInit (hSession);
 
 	while (-1 != (c = getopt(argc, argv, "v")))
 		switch (c) {
@@ -55,13 +56,10 @@ main(int argc, char *argv[])
 		if ((tal = tal_parse_from_file(argv[i])) == NULL)
 			break;
 		if (verbose)
-			print_tal(tal);
+			print_tal(hSession, tal);
 		tal_free(tal);
 	}
 
-	EVP_cleanup();
-	CRYPTO_cleanup_all_ex_data();
-	ERR_remove_thread_state(NULL);
-	ERR_free_strings();
+	sessionFree (hSession, EXIT_SUCCESS);
 	return i < (size_t)argc ? EXIT_FAILURE : EXIT_SUCCESS;
 }

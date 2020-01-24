@@ -378,6 +378,7 @@ int		 rsync_uri_parse(const char **, size_t *,
 /* Logging (though really used for OpenSSL errors). */
 
 void log_set_silent(int value);
+int log_get_silent(void);
 void log_set_verbose(int value);
 int log_get_verbose(void);
 void log_warnx(const char *fmt, ...);

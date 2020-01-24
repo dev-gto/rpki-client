@@ -36,9 +36,10 @@ main(int argc, char *argv[])
 	size_t		 i;
 	X509		*xp = NULL;
 	struct cert	*p;
+	struct Session sSession;
+	HSESSION hSession = &sSession;
 
-	SSL_library_init();
-	SSL_load_error_strings();
+	sessionInit (hSession);
 
 	while ((c = getopt(argc, argv, "tv")) != -1)
 		switch (c) {
@@ -62,14 +63,11 @@ main(int argc, char *argv[])
 		if (p == NULL)
 			break;
 		if (verbose)
-			print_cert(p);
+			print_cert(hSession, p);
 		cert_free(p);
 		X509_free(xp);
 	}
 
-	EVP_cleanup();
-	CRYPTO_cleanup_all_ex_data();
-	ERR_remove_thread_state(NULL);
-	ERR_free_strings();
+	sessionFree (hSession, EXIT_SUCCESS);
 	return i < (size_t)argc ? EXIT_FAILURE : EXIT_SUCCESS;
 }

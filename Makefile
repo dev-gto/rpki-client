@@ -23,6 +23,7 @@ OBJS = as.o \
 	   cms.o \
 	   compats.o \
 	   crl.o \
+	   hash.o \
 	   io.o \
 	   ip.o \
 	   log.o \

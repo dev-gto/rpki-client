@@ -58,7 +58,8 @@ static void usage(int iSts) {
 		   "  -f <format>                    Format output"
 		   "                                    TEXT    - default\n"
 		   "                                    MONITOR - JSON format containing only\n"
-		   "  --local-repository <directory> Directory where the repository local cache will be read"
+		   "  --local-repository <directory> Directory where the repository local cache will be read\n"
+		   "\n"
 		   , APP_NAME
 		   );
 }

@@ -137,6 +137,8 @@ static int loadArguments(HSESSION hSession, int argc, char *argv [ ]) {
 
 	if (iShowUsage || iSts) {
 		usage(iSts);
+		// Any error code is enough to exit
+		iSts = STS_ERROR_MISSING_PARAMS;
 	}
 	return iSts;
 }

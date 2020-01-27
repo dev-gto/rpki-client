@@ -80,10 +80,7 @@ static int loadArguments(HSESSION hSession, int argc, char *argv [ ]) {
 			// Check if is a valid file
 			if (stat (argv[iargv], &st) == 0) {
 				if (S_ISREG(st.st_mode) || S_ISLNK(st.st_mode)) {
-					FileEntry *entry;
-					entry = FileEntry_new();
-					entry->lpcFilename = strdup(argv[iargv]);
-					sk_FileEntry_push(hSession->filenames, entry);
+					sk_OPENSSL_STRING_push(hSession->filenames, strdup(argv[iargv]));
 				}
 			}
 			continue;
@@ -130,7 +127,7 @@ static int loadArguments(HSESSION hSession, int argc, char *argv [ ]) {
 		}
 	}
 	if (iSts == STS_OK) {
-		if (sk_FileEntry_num(hSession->filenames) <= 0) {
+		if (sk_OPENSSL_STRING_num(hSession->filenames) <= 0) {
 			iSts = STS_ERROR_NO_INPUT_FILES;
 		}
 	}

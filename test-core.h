@@ -32,12 +32,7 @@ typedef struct {
     char *lpcReference;
 } Error;
 
-typedef struct {
-	char *lpcFilename;              // Filename to be processed
-} FileEntry;
-DEFINE_STACK_OF(FileEntry)
-FileEntry* FileEntry_new(void);
-void FileEntry_free(FileEntry *entry);
+void FileEntry_free(char *entry);
 
 typedef struct Session
 {
@@ -46,7 +41,7 @@ typedef struct Session
     int iNumErrorsFound;
     char *lpcLocalRepository;       // Base directory for using with iOptRecursive
     char *lpcCurrentFilename;       // Current file being processed
-	STACK_OF(FileEntry) *filenames; // List of filenames to process (index zero record to be processed first)
+	STACK_OF(OPENSSL_STRING) *filenames; // List of filenames to process (index zero record to be processed first)
     HHASH hASNs;                    // Hash key: certificate SKI; value: string of asns
     HHASH hHostnames;               // Cache of valid hostnames. Hash key: hostname; value: 1 - valid; 2 - invalid
 } *HSESSION;

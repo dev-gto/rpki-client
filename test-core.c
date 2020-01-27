@@ -65,13 +65,8 @@ void hex_encode (unsigned char *lpcAsc, unsigned char *lpcBcd, size_t szBcd)
 	}
 }
 
-FileEntry* FileEntry_new(void) {
-	return malloc(sizeof(FileEntry));
-}
-
-void FileEntry_free(FileEntry *entry) {
+void FileEntry_free(char *entry) {
 	if (entry) {
-		free(entry->lpcFilename);
 		free(entry);
 	}
 }
@@ -82,7 +77,7 @@ void sessionInit (HSESSION hSession) {
 	if (hSession) {
 		memset (hSession, 0, sizeof (struct Session));
 		hSession->lpcLocalRepository = ".";
-		hSession->filenames = sk_FileEntry_new_null();
+		hSession->filenames = sk_OPENSSL_STRING_new_null();
 		hSession->hASNs = hashNew(0);
 		hSession->hHostnames = hashNew(0);
 	}
@@ -92,7 +87,7 @@ int sessionFree (HSESSION hSession, int iRtn) {
 	if (hSession) {
 		hashFree(hSession->hASNs);
 		hashFree(hSession->hHostnames);
-		sk_FileEntry_pop_free(hSession->filenames, FileEntry_free);
+		sk_OPENSSL_STRING_pop_free(hSession->filenames, FileEntry_free);
 	}
 
 	EVP_cleanup();
@@ -264,11 +259,8 @@ void print_cert(HSESSION hSession, const struct cert *p)
 			strcat (lpcFilename, "/");
 			strcat (lpcFilename, lpcBasename);
 			if (stat (lpcFilename, &st) == 0 && (S_ISREG(st.st_mode) || S_ISLNK(st.st_mode))) {
-				FileEntry *entry;
-				entry = FileEntry_new();
-				entry->lpcFilename = lpcFilename;
 				// Just append
-				sk_FileEntry_push(hSession->filenames, entry);
+				sk_OPENSSL_STRING_push(hSession->filenames, lpcFilename);
 				iFlgFreeFilename = 0;
 			} 
 			else {
@@ -530,16 +522,13 @@ void print_mft(HSESSION hSession, const struct mft *p)
 				strcat (lpcFilename, lpcBasename);
 				strcat (lpcFilename, p->files[i].file);
 				if (stat (lpcFilename, &st) == 0 && (S_ISREG(st.st_mode) || S_ISLNK(st.st_mode))) {
-					FileEntry *entry;
-					entry = FileEntry_new();
-					entry->lpcFilename = lpcFilename;
 					if (strcasecmp(lpcFilename + strlen(lpcFilename) - 4, ".crl") == 0) {
 						// Prioritize crl
-						sk_FileEntry_insert(hSession->filenames, entry, 0);
+						sk_OPENSSL_STRING_insert(hSession->filenames, lpcFilename, 0);
 						iCurrentSlot++;
 					}
 					else {
-						sk_FileEntry_insert(hSession->filenames, entry, iCurrentSlot++);
+						sk_OPENSSL_STRING_insert(hSession->filenames, lpcFilename, iCurrentSlot++);
 					}
 				} 
 				else {
@@ -739,11 +728,11 @@ static void processFile(HSESSION hSession, char *lpcFilename) {
 
 void jsMonitor(HSESSION hSession) {
 	printf("{\n\t\"objects\":[");
-	while (sk_FileEntry_num(hSession->filenames) > 0) {
-		FileEntry *t = sk_FileEntry_value(hSession->filenames, 0);
-		sk_FileEntry_delete(hSession->filenames, 0);
-		processFile(hSession, t->lpcFilename);
-		FileEntry_free(t);
+	while (sk_OPENSSL_STRING_num(hSession->filenames) > 0) {
+		char *lpcFilename = sk_OPENSSL_STRING_value(hSession->filenames, 0);
+		sk_OPENSSL_STRING_delete(hSession->filenames, 0);
+		processFile(hSession, lpcFilename);
+		FileEntry_free(lpcFilename);
 	}
 
 	if (hSession->iNumErrorsFound) {
@@ -753,11 +742,11 @@ void jsMonitor(HSESSION hSession) {
 }
 
 void txtDump(HSESSION hSession) {
-	while (sk_FileEntry_num(hSession->filenames) > 0) {
-		FileEntry *t = sk_FileEntry_value(hSession->filenames, 0);
-		sk_FileEntry_delete(hSession->filenames, 0);
-		printf("Processing [%s]:\n", t->lpcFilename);
-		processFile(hSession, t->lpcFilename);
-		FileEntry_free(t);
+	while (sk_OPENSSL_STRING_num(hSession->filenames) > 0) {
+		char *lpcFilename = sk_OPENSSL_STRING_value(hSession->filenames, 0);
+		sk_OPENSSL_STRING_delete(hSession->filenames, 0);
+		printf("Processing [%s]:\n", lpcFilename);
+		processFile(hSession, lpcFilename);
+		FileEntry_free(lpcFilename);
 	}
 }

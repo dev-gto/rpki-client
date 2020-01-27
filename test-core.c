@@ -279,7 +279,7 @@ void print_cert(HSESSION hSession, const struct cert *p)
 		}
 
 		dumpErrors(hSession, errors, p->basic.ski);
-		
+
 		if (iFlgFreeFilename) {
 			free(lpcFilename);
 		}
@@ -652,6 +652,7 @@ tal_parse_from_file(const char *fn)
 	char		*buf;
 	struct tal	*p;
 
+	p = NULL;
     buf = tal_read_file(fn);
 	if (buf != NULL) {
 		p = tal_parse(fn, buf);

@@ -79,6 +79,8 @@ void sessionInit (HSESSION hSession) {
 		hSession->lpcLocalRepository = ".";
 		hSession->filenames = sk_OPENSSL_STRING_new_null();
 		hSession->hASNs = hashNew(0);
+		hSession->hV4s = hashNew(0);
+		hSession->hV6s = hashNew(0);
 		hSession->hHostnames = hashNew(0);
 	}
 }
@@ -86,6 +88,8 @@ void sessionInit (HSESSION hSession) {
 int sessionFree (HSESSION hSession, int iRtn) {
 	if (hSession) {
 		hashFree(hSession->hASNs);
+		hashFree(hSession->hV4s);
+		hashFree(hSession->hV6s);
 		hashFree(hSession->hHostnames);
 		sk_OPENSSL_STRING_pop_free(hSession->filenames, FileEntry_free);
 	}
@@ -119,16 +123,31 @@ static void dumpErrors(HSESSION hSession, Error *errors, char *aki)
 	Error *lpcError;
 	char *lpcASNs;
 	char *lpcSep;
+	char *lpcIPs;
 
 	if (hSession->iOptOutput == OPT_OUTPUT_JS_MONITOR) {
 		if (errors[0].iCode) {
 			printf("%s\t\t{\n", hSession->iNumErrorsFound ? ",\n": "\n");
 			printf("\t\t\t\"filename\":\"%s\",\n", hSession->lpcCurrentFilename);
+			lpcSep="";
 			if (aki != NULL) {
+				printf("\t\t\t\"resources\": {\n");
 				lpcASNs = hashGet(hSession->hASNs, aki);
 				if (lpcASNs) {
-					printf("\t\t\t\"asns\":[%s],\n", lpcASNs);
+					printf("%s\t\t\t\t\"asn\":\"%s\"", lpcSep, lpcASNs);
+					lpcSep=",\n";
 				}
+				lpcIPs = hashGet(hSession->hV4s, aki);
+				if (lpcIPs != NULL) {
+					printf("%s\t\t\t\t\"v4\":\"%s\"", lpcSep, lpcIPs);
+					lpcSep=",\n";
+				}
+				lpcIPs = hashGet(hSession->hV6s, aki);
+				if (lpcIPs != NULL) {
+					printf("%s\t\t\t\t\"v6\":\"%s\"", lpcSep, lpcIPs);
+					lpcSep=",\n";
+				}
+				printf("\n\t\t\t},\n");
 			}
 			printf("\t\t\t\"errors\":[");
 			lpcSep="";
@@ -203,15 +222,19 @@ void print_cert(HSESSION hSession, const struct cert *p)
 	}
 
 	if (hSession->iOptRecursive) {
+		hashRemoveKey(hSession->hASNs, p->basic.ski);
+		hashRemoveKey(hSession->hV4s, p->basic.ski);
+		hashRemoveKey(hSession->hV6s, p->basic.ski);
+
 		for (i = 0; i < p->asz; i++) {
 			switch (p->as[i].type) {
 			case CERT_AS_ID:
-				sprintf(buf1, "\"%"PRIu32"\"", p->as[i].id);
+				sprintf(buf1, "%"PRIu32, p->as[i].id);
 				hashSetCat(hSession->hASNs, p->basic.ski, buf1, ',');
 				break;
 
 			case CERT_AS_RANGE:
-				sprintf(buf1, "\"%"PRIu32 "-%" PRIu32"\"", p->as[i].range.min, p->as[i].range.max);
+				sprintf(buf1, "%"PRIu32 "-%" PRIu32, p->as[i].range.min, p->as[i].range.max);
 				hashSetCat(hSession->hASNs, p->basic.ski, buf1, ',');
 				break;
 
@@ -219,6 +242,38 @@ void print_cert(HSESSION hSession, const struct cert *p)
 				break;
 			}
 		}
+
+		for (i = 0; i < p->ipsz; i++)
+			switch (p->ips[i].type) {
+			case CERT_IP_ADDR:
+				ip_addr_print(&p->ips[i].ip,
+					p->ips[i].afi, buf1, sizeof(buf1));
+				if (p->ips[i].afi == AFI_IPV4) {
+					hashSetCat(hSession->hV4s, p->basic.ski, buf1, ',');
+				} else {
+					hashSetCat(hSession->hV6s, p->basic.ski, buf1, ',');
+				}
+				break;
+
+			case CERT_IP_RANGE:
+				sockt = (p->ips[i].afi == AFI_IPV4) ?
+					AF_INET : AF_INET6;
+				inet_ntop(sockt, p->ips[i].min, buf1, sizeof(buf1));
+				inet_ntop(sockt, p->ips[i].max, buf2, sizeof(buf2));
+				char caBuf[256];
+				sprintf(caBuf, "%s-%s", buf1, buf2);
+
+				if (p->ips[i].afi == AFI_IPV4) {
+					hashSetCat(hSession->hV4s, p->basic.ski, caBuf, ',');
+				} else {
+					hashSetCat(hSession->hV6s, p->basic.ski, caBuf, ',');
+				}
+				break;
+
+			default:
+				break;
+			}
+
 
 		lpcLocation = strdup(p->mft);
 		lpcBasename = lpcLocation;

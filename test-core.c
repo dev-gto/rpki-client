@@ -46,7 +46,7 @@
 #define JS_STS_ERROR_NOT_BEFORE          103
 #define JS_STS_ERROR_THIS_UPDATE         104
 #define JS_STS_ERROR_NEXT_UPDATE         105
-#define JS_STS_ERROR_DUPLICATED_ASN      106
+#define JS_STS_ERROR_STALE_DATA          106
 
 static unsigned char ToAsc (unsigned char c)
 {
@@ -81,6 +81,7 @@ void sessionInit (HSESSION hSession) {
 		hSession->hASNs = hashNew(0);
 		hSession->hV4s = hashNew(0);
 		hSession->hV6s = hashNew(0);
+		hSession->hStaleMFTs = hashNew(0);
 		hSession->hHostnames = hashNew(0);
 	}
 }
@@ -90,6 +91,7 @@ int sessionFree (HSESSION hSession, int iRtn) {
 		hashFree(hSession->hASNs);
 		hashFree(hSession->hV4s);
 		hashFree(hSession->hV6s);
+		hashFree(hSession->hStaleMFTs);
 		hashFree(hSession->hHostnames);
 		sk_OPENSSL_STRING_pop_free(hSession->filenames, FileEntry_free);
 	}
@@ -528,6 +530,11 @@ void print_mft(HSESSION hSession, const struct mft *p)
 
 	dumpErrors(hSession, errors, p->eeCert.aki);
 
+	if (iNumErrors) {
+		// From now on future calls to dumpErrors will analyze aki
+		hashSetCpy(hSession->hStaleMFTs, p->eeCert.aki, hSession->lpcCurrentFilename);
+	}
+
 	lpcLocation = strdup(p->eeCert.eeLocation);
 	lpcBasename = lpcLocation;
 	// strip protocol from lpcBasename
@@ -604,7 +611,7 @@ void print_mft(HSESSION hSession, const struct mft *p)
 void print_roa(HSESSION hSession, const struct roa *p)
 {
 	int iNumErrors;
-	char	 buf[128];
+	char	 buf[256];
 	size_t	 i;
 	char caNotAfter[64], caNotBefore[64], caNow[64];
 	time_t now;
@@ -637,6 +644,32 @@ void print_roa(HSESSION hSession, const struct roa *p)
 		errors[iNumErrors].lpcDescription = "notAfter expired";
 		errors[iNumErrors].lpcReceived = caNotAfter;
 		errors[iNumErrors].lpcReference = caNow;
+		iNumErrors++;
+	}
+	if (hashGet(hSession->hStaleMFTs, p->eeCert.aki)) {
+		errors[iNumErrors].iCode = JS_STS_ERROR_STALE_DATA;
+		errors[iNumErrors].lpcDescription = "stale data";
+		char caLine[1024];
+		char caMax[32];
+		memset (caLine, 0, sizeof (caLine));
+		sprintf(caLine, "asn=%"PRIu32"; ip=", p->asid);
+		char *lpcSep="";
+		for (i = 0; i < p->ipsz; i++) {
+			ip_addr_print(&p->ips[i].addr,
+				p->ips[i].afi, buf, sizeof(buf));
+			sprintf(caMax, "/%zu", p->ips[i].maxlength);
+			if (strlen(buf) > strlen(caMax) && strcmp(buf - strlen(caMax), caMax) != 0) {
+				strcat (buf, "-");
+				strcat (buf, caMax + 1);
+			}
+			strncat (caLine, lpcSep, sizeof(caLine) - 2);
+			strncat (caLine, buf, sizeof(caLine) - 2);
+			lpcSep = ",";
+		}
+		strcat (caLine, ";");
+
+		errors[iNumErrors].lpcReceived = caLine;
+		errors[iNumErrors].lpcReference = hashGet(hSession->hStaleMFTs, p->eeCert.aki);
 		iNumErrors++;
 	}
 

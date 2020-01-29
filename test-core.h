@@ -43,8 +43,9 @@ typedef struct Session
     char *lpcCurrentFilename;       // Current file being processed
 	STACK_OF(OPENSSL_STRING) *filenames; // List of filenames to process (index zero record to be processed first)
     HHASH hASNs;                    // Hash key: certificate SKI; value: string of asns
-    HHASH hV4s;                     // Hash key: filename; value: string of IPv4s
-    HHASH hV6s;                     // Hash key: filename; value: string of IPv6s
+    HHASH hV4s;                     // Hash key: certificate SKI; value: string of IPv4s
+    HHASH hV6s;                     // Hash key: certificate SKI; value: string of IPv6s
+    HHASH hStaleMFTs;               // Hash key: certificate AKI; value: int 1 - mft in stale (corresponding ROAs and other files with the same AKI are also considered 'stale')
     HHASH hHostnames;               // Cache of valid hostnames. Hash key: hostname; value: 1 - valid; 2 - invalid
 } *HSESSION;
 

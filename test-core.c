@@ -616,11 +616,15 @@ void print_roa(HSESSION hSession, const struct roa *p)
 	char caNotAfter[64], caNotBefore[64], caNow[64];
 	time_t now;
 	struct tm *tm;
-	Error errors[5];
+	Error *errors;
 
 	assert(p != NULL);
 	iNumErrors = 0;
-	memset (errors, 0, sizeof(errors));
+	errors = malloc(sizeof(errors)*(4+p->ipsz));
+	if (errors == NULL) {
+		return;
+	}
+	memset (errors, 0,sizeof(errors)*(4+p->ipsz));
 
     now = time(NULL);
 	tm = gmtime(&now);
@@ -674,6 +678,7 @@ void print_roa(HSESSION hSession, const struct roa *p)
 	}
 
 	dumpErrors(hSession, errors, p->eeCert.aki);
+	free(errors);
 
 	if (hSession->iOptOutput == OPT_OUTPUT_TEXT) {
 		printf("%*.*s: %s\n", TAB, TAB, "Now", caNow);

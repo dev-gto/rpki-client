@@ -662,7 +662,7 @@ void print_roa(HSESSION hSession, const struct roa *p)
 			ip_addr_print(&p->ips[i].addr,
 				p->ips[i].afi, buf, sizeof(buf));
 			sprintf(caMax, "/%zu", p->ips[i].maxlength);
-			if (strlen(buf) > strlen(caMax) && strcmp(buf - strlen(caMax), caMax) != 0) {
+			if (strlen(buf) > strlen(caMax) && strcmp(buf + strlen(buf) - strlen(caMax), caMax) != 0) {
 				strcat (buf, "-");
 				strcat (buf, caMax + 1);
 			}

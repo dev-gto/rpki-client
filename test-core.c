@@ -398,6 +398,7 @@ void print_cert(HSESSION hSession, const struct cert *p)
 void print_crl (HSESSION hSession, X509_CRL *p)
 {
 	int i, numRevoked;
+	int iNumErrors;
 	char caRevocationDate[64];
 	char caLast[64], caNext[64], caNow[64];
 	char *issuerName;
@@ -405,8 +406,11 @@ void print_crl (HSESSION hSession, X509_CRL *p)
 	struct tm tm;
 	ASN1_INTEGER *n;
 	STACK_OF(X509_REVOKED) *revoked;
+	Error errors[5];
 
 	assert(p != NULL);
+	iNumErrors = 0;
+	memset (errors, 0, sizeof(errors));
 
     now = time(NULL);
 	strftime(caNow, sizeof(caNow)-1, "%Y-%m-%d %H:%M:%S UTC", gmtime(&now));
@@ -418,6 +422,23 @@ void print_crl (HSESSION hSession, X509_CRL *p)
 
 	tm = asn1Time2Time(X509_CRL_get0_nextUpdate(p));
 	strftime(caNext, sizeof(caNext)-1, "%Y-%m-%d %H:%M:%S UTC", &tm);
+
+	if (strcmp(caNow, caLast) < 0) {
+		errors[iNumErrors].iCode = JS_STS_ERROR_THIS_UPDATE;
+		errors[iNumErrors].lpcDescription = "thisUpdate not yet valid";
+		errors[iNumErrors].lpcReceived = caLast;
+		errors[iNumErrors].lpcReference = caNow;
+		iNumErrors++;
+	}
+	if (strcmp(caNow, caNext) > 0) {
+		errors[iNumErrors].iCode = JS_STS_ERROR_NEXT_UPDATE;
+		errors[iNumErrors].lpcDescription = "nextUpdate expired";
+		errors[iNumErrors].lpcReceived = caNext;
+		errors[iNumErrors].lpcReference = caNow;
+		iNumErrors++;
+	}
+
+	dumpErrors(hSession, errors, x509_crl_get_aki(p));
 
 	if (hSession->iOptOutput == OPT_OUTPUT_TEXT) {
 		printf("%*.*s: %s\n", TAB, TAB, "Now", caNow);
@@ -502,7 +523,7 @@ void print_mft(HSESSION hSession, const struct mft *p)
 	if (strcmp(caNow, caThis) < 0) {
 		errors[iNumErrors].iCode = JS_STS_ERROR_THIS_UPDATE;
 		errors[iNumErrors].lpcDescription = "thisUpdate not yet valid";
-		errors[iNumErrors].lpcReceived = caNext;
+		errors[iNumErrors].lpcReceived = caThis;
 		errors[iNumErrors].lpcReference = caNow;
 		iNumErrors++;
 	}

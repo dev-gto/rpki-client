@@ -243,8 +243,7 @@ mft_parse_econtent(const unsigned char *d, size_t dsz, struct parse *p, int forc
 	struct tm			tm;
 	const ASN1_GENERALIZEDTIME *from, *until;
 	int			 i, rc = -1;
-	time_t			 this, next, now = time(NULL);
-	char			 caThis[64], caNow[64], caNext[64];
+	time_t			 this, next;
 
 	if ((seq = d2i_ASN1_SEQUENCE_ANY(NULL, &d, dsz)) == NULL) {
 		cryptowarnx("%s: RFC 6486 section 4.2: Manifest: "
@@ -323,10 +322,6 @@ mft_parse_econtent(const unsigned char *d, size_t dsz, struct parse *p, int forc
 
 	tm = asn1Time2Time(until);
 	next = timegm(&tm);
-
-	strftime(caThis, sizeof(caThis)-1, "%Y-%m-%d %H:%M:%S", gmtime(&this));
-	strftime(caNext, sizeof(caNext)-1, "%Y-%m-%d %H:%M:%S", gmtime(&next));
-	strftime(caNow, sizeof(caNow)-1, "%Y-%m-%d %H:%M:%S", gmtime(&now));
 
 	memcpy(&p->res->thisUpdate, &this, sizeof (time_t));
 	memcpy(&p->res->nextUpdate, &next, sizeof (time_t));

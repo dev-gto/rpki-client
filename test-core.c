@@ -48,6 +48,8 @@
 #define JS_STS_ERROR_NEXT_UPDATE         105
 #define JS_STS_ERROR_STALE_DATA          106
 
+#define MSK_TIME_FORMAT "%Y-%m-%dT%H:%M:%SZ"
+
 static unsigned char ToAsc (unsigned char c)
 {
 	unsigned char nib = c & 0x0f;
@@ -200,13 +202,13 @@ void print_cert(HSESSION hSession, const struct cert *p)
 
     now = time(NULL);
 	tm = gmtime(&now);
-	strftime(caNow, sizeof(caNow)-1, "%Y-%m-%d %H:%M:%S UTC", tm);
+	strftime(caNow, sizeof(caNow)-1, MSK_TIME_FORMAT, tm);
 
 	tm = gmtime(&p->basic.notBefore);
-	strftime(caNotBefore, sizeof(caNotBefore)-1, "%Y-%m-%d %H:%M:%S UTC", tm);
+	strftime(caNotBefore, sizeof(caNotBefore)-1, MSK_TIME_FORMAT, tm);
 
 	tm = gmtime(&p->basic.notAfter);
-	strftime(caNotAfter, sizeof(caNotAfter)-1, "%Y-%m-%d %H:%M:%S UTC", tm);
+	strftime(caNotAfter, sizeof(caNotAfter)-1, MSK_TIME_FORMAT, tm);
 
 	if (strcmp(caNow, caNotBefore) < 0) {
 		errors[iNumErrors].iCode = JS_STS_ERROR_NOT_BEFORE;
@@ -413,15 +415,15 @@ void print_crl (HSESSION hSession, X509_CRL *p)
 	memset (errors, 0, sizeof(errors));
 
     now = time(NULL);
-	strftime(caNow, sizeof(caNow)-1, "%Y-%m-%d %H:%M:%S UTC", gmtime(&now));
+	strftime(caNow, sizeof(caNow)-1, MSK_TIME_FORMAT, gmtime(&now));
 
 	revoked = X509_CRL_get_REVOKED(p);
 
 	tm = asn1Time2Time(X509_CRL_get0_lastUpdate(p));
-	strftime(caLast, sizeof(caLast)-1, "%Y-%m-%d %H:%M:%S UTC", &tm);
+	strftime(caLast, sizeof(caLast)-1, MSK_TIME_FORMAT, &tm);
 
 	tm = asn1Time2Time(X509_CRL_get0_nextUpdate(p));
-	strftime(caNext, sizeof(caNext)-1, "%Y-%m-%d %H:%M:%S UTC", &tm);
+	strftime(caNext, sizeof(caNext)-1, MSK_TIME_FORMAT, &tm);
 
 	if (strcmp(caNow, caLast) < 0) {
 		errors[iNumErrors].iCode = JS_STS_ERROR_THIS_UPDATE;
@@ -477,7 +479,7 @@ void print_crl (HSESSION hSession, X509_CRL *p)
 					}
 				}
 				tm = asn1Time2Time(X509_REVOKED_get0_revocationDate(rev));
-				strftime(caRevocationDate, sizeof(caRevocationDate)-1, "%Y-%m-%d %H:%M:%S UTC", &tm);
+				strftime(caRevocationDate, sizeof(caRevocationDate)-1, MSK_TIME_FORMAT, &tm);
 				printf("%*.*s:    %s\n", TAB, TAB, "Revokation Date", caRevocationDate);
 			}
 		}
@@ -506,19 +508,19 @@ void print_mft(HSESSION hSession, const struct mft *p)
 
     now = time(NULL);
 	tm = gmtime(&now);
-	strftime(caNow, sizeof(caNow)-1, "%Y-%m-%d %H:%M:%S UTC", tm);
+	strftime(caNow, sizeof(caNow)-1, MSK_TIME_FORMAT, tm);
 
 	tm = gmtime(&p->thisUpdate);
-	strftime(caThis, sizeof(caThis)-1, "%Y-%m-%d %H:%M:%S UTC", tm);
+	strftime(caThis, sizeof(caThis)-1, MSK_TIME_FORMAT, tm);
 
 	tm = gmtime(&p->nextUpdate);
-	strftime(caNext, sizeof(caNext)-1, "%Y-%m-%d %H:%M:%S UTC", tm);
+	strftime(caNext, sizeof(caNext)-1, MSK_TIME_FORMAT, tm);
 
 	tm = gmtime(&p->eeCert.notBefore);
-	strftime(caNotBefore, sizeof(caNotBefore)-1, "%Y-%m-%d %H:%M:%S UTC", tm);
+	strftime(caNotBefore, sizeof(caNotBefore)-1, MSK_TIME_FORMAT, tm);
 
 	tm = gmtime(&p->eeCert.notAfter);
-	strftime(caNotAfter, sizeof(caNotAfter)-1, "%Y-%m-%d %H:%M:%S UTC", tm);
+	strftime(caNotAfter, sizeof(caNotAfter)-1, MSK_TIME_FORMAT, tm);
 
 	if (strcmp(caNow, caThis) < 0) {
 		errors[iNumErrors].iCode = JS_STS_ERROR_THIS_UPDATE;
@@ -649,13 +651,13 @@ void print_roa(HSESSION hSession, const struct roa *p)
 
     now = time(NULL);
 	tm = gmtime(&now);
-	strftime(caNow, sizeof(caNow)-1, "%Y-%m-%d %H:%M:%S UTC", tm);
+	strftime(caNow, sizeof(caNow)-1, MSK_TIME_FORMAT, tm);
 
 	tm = gmtime(&p->eeCert.notBefore);
-	strftime(caNotBefore, sizeof(caNotBefore)-1, "%Y-%m-%d %H:%M:%S UTC", tm);
+	strftime(caNotBefore, sizeof(caNotBefore)-1, MSK_TIME_FORMAT, tm);
 
 	tm = gmtime(&p->eeCert.notAfter);
-	strftime(caNotAfter, sizeof(caNotAfter)-1, "%Y-%m-%d %H:%M:%S UTC", tm);
+	strftime(caNotAfter, sizeof(caNotAfter)-1, MSK_TIME_FORMAT, tm);
 
 	if (strcmp(caNow, caNotBefore) < 0) {
 		errors[iNumErrors].iCode = JS_STS_ERROR_NOT_BEFORE;
@@ -841,7 +843,15 @@ static void processFile(HSESSION hSession, char *lpcFilename) {
 }
 
 void jsMonitor(HSESSION hSession) {
-	printf("{\n\t\"objects\":[");
+	char caNow[64];
+	time_t now;
+	struct tm *tm;
+
+    now = time(NULL);
+	tm = gmtime(&now);
+	strftime(caNow, sizeof(caNow)-1, MSK_TIME_FORMAT, tm);
+
+	printf("{\n\t\"reference date\":\"%s\",\n\t\"objects\":[", caNow);
 	while (sk_OPENSSL_STRING_num(hSession->filenames) > 0) {
 		char *lpcFilename = sk_OPENSSL_STRING_value(hSession->filenames, 0);
 		sk_OPENSSL_STRING_delete(hSession->filenames, 0);

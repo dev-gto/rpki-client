@@ -25,14 +25,8 @@
 #define OPT_OUTPUT_TEXT 0
 #define OPT_OUTPUT_JS_MONITOR 1
 
-#define ERR_ORIGIN_UNDEFINED 0
-#define ERR_ORIGIN_MFT       1
-#define ERR_ORIGIN_CER       2
-#define ERR_ORIGIN_CRL       3
-#define ERR_ORIGIN_ROA       4
 typedef struct {
     int iCode;
-    int iOrigin;
     char *lpcDescription;
     char *lpcReceived;
     char *lpcReference;

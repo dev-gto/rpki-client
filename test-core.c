@@ -20,6 +20,7 @@
 #include <sys/socket.h>
 
 #include <assert.h>
+#include <ctype.h>
 #include <err.h>
 #include <inttypes.h>
 #include <stdio.h>
@@ -47,6 +48,12 @@
 #define JS_STS_ERROR_THIS_UPDATE         104
 #define JS_STS_ERROR_NEXT_UPDATE         105
 #define JS_STS_ERROR_STALE_DATA          106
+
+#define ORIGIN_UNDEFINED 0
+#define ORIGIN_MFT       1
+#define ORIGIN_CER       2
+#define ORIGIN_CRL       3
+#define ORIGIN_ROA       4
 
 #define MSK_TIME_FORMAT "%Y-%m-%dT%H:%M:%SZ"
 
@@ -80,6 +87,8 @@ void sessionInit (HSESSION hSession) {
 		memset (hSession, 0, sizeof (struct Session));
 		hSession->lpcLocalRepository = ".";
 		hSession->filenames = sk_OPENSSL_STRING_new_null();
+		hSession->hCertFilenames = hashNew(0);
+		hSession->hCertSerialNumbers = hashNew(0);
 		hSession->hASNs = hashNew(0);
 		hSession->hV4s = hashNew(0);
 		hSession->hV6s = hashNew(0);
@@ -90,6 +99,8 @@ void sessionInit (HSESSION hSession) {
 
 int sessionFree (HSESSION hSession, int iRtn) {
 	if (hSession) {
+		hashFree(hSession->hCertFilenames);
+		hashFree(hSession->hCertSerialNumbers);
 		hashFree(hSession->hASNs);
 		hashFree(hSession->hV4s);
 		hashFree(hSession->hV6s);
@@ -122,19 +133,60 @@ static void print_sep_line (const char *title)
 	printf("\n");
 }
 
-static void dumpErrors(HSESSION hSession, Error *errors, char *aki)
+static void dumpErrors(HSESSION hSession, int iOrigin, Error *errors, char *aki)
 {
 	Error *lpcError;
 	char *lpcASNs;
 	char *lpcSep;
 	char *lpcIPs;
+	char *lpcData;
 
 	if (hSession->iOptOutput == OPT_OUTPUT_JS_MONITOR) {
 		if (errors[0].iCode) {
 			printf("%s\t\t{\n", hSession->iNumErrorsFound ? ",\n": "\n");
+			lpcData = NULL;
+			switch (iOrigin) {
+				case ORIGIN_CER:
+					lpcData = "cer";
+					break;
+				case ORIGIN_CRL:
+					lpcData = "crl";
+					break;
+				case ORIGIN_MFT:
+					lpcData = "mft";
+					break;
+				case ORIGIN_ROA:
+					lpcData = "roa";
+					break;
+			}
+			if (lpcData != NULL) {
+				printf("\t\t\t\"type\":\"%s\",\n", lpcData);
+			}
 			printf("\t\t\t\"filename\":\"%s\",\n", hSession->lpcCurrentFilename);
 			lpcSep="";
 			if (aki != NULL) {
+				if (iOrigin == ORIGIN_MFT) {
+					printf("\t\t\t\"parent\": {\n");
+					printf("\t\t\t\t\"type\":\"cer\"");
+					lpcData = hashGet(hSession->hCertFilenames, aki);
+					if (lpcData) {
+						printf(",\n\t\t\t\t\"filename\":\"%s\"", lpcData);
+					}
+					lpcData = hashGet(hSession->hCertSerialNumbers, aki);
+					if (lpcData) {
+						printf(",\n\t\t\t\t\"serial\":\"%s\"", lpcData);
+					}
+					printf("\n\t\t\t},\n");
+				} else if (iOrigin == ORIGIN_CRL || iOrigin == ORIGIN_ROA) {
+					printf("\t\t\t\"parent\": {\n");
+					printf("\t\t\t\t\"type\":\"mft\"");
+					lpcData = hashGet(hSession->hStaleMFTs, aki);
+					if (lpcData) {
+						printf(",\n\t\t\t\t\"filename\":\"%s\"", lpcData);
+					}
+					printf("\n\t\t\t},\n");
+				}
+
 				printf("\t\t\t\"resources\": {\n");
 				lpcASNs = hashGet(hSession->hASNs, aki);
 				if (lpcASNs) {
@@ -230,6 +282,8 @@ void print_cert(HSESSION hSession, const struct cert *p)
 		hashRemoveKey(hSession->hV4s, p->basic.ski);
 		hashRemoveKey(hSession->hV6s, p->basic.ski);
 
+		hashSetCpy(hSession->hCertFilenames, p->basic.ski, hSession->lpcCurrentFilename);
+		hashSetCpy(hSession->hCertSerialNumbers, p->basic.ski, p->basic.serial);
 		for (i = 0; i < p->asz; i++) {
 			switch (p->as[i].type) {
 			case CERT_AS_ID:
@@ -329,7 +383,7 @@ void print_cert(HSESSION hSession, const struct cert *p)
 			}
 		}
 
-		dumpErrors(hSession, errors, p->basic.ski);
+		dumpErrors(hSession, ORIGIN_CER, errors, p->basic.ski);
 
 		if (iFlgFreeFilename) {
 			free(lpcFilename);
@@ -440,7 +494,7 @@ void print_crl (HSESSION hSession, X509_CRL *p)
 		iNumErrors++;
 	}
 
-	dumpErrors(hSession, errors, x509_crl_get_aki(p));
+	dumpErrors(hSession, ORIGIN_CRL, errors, x509_crl_get_aki(p));
 
 	if (hSession->iOptOutput == OPT_OUTPUT_TEXT) {
 		printf("%*.*s: %s\n", TAB, TAB, "Now", caNow);
@@ -551,7 +605,7 @@ void print_mft(HSESSION hSession, const struct mft *p)
 		iNumErrors++;
 	}
 
-	dumpErrors(hSession, errors, p->eeCert.aki);
+	dumpErrors(hSession, ORIGIN_MFT, errors, p->eeCert.aki);
 
 	if (iNumErrors) {
 		// From now on future calls to dumpErrors will analyze aki
@@ -696,11 +750,10 @@ void print_roa(HSESSION hSession, const struct roa *p)
 		strcat (caLine, ";");
 
 		errors[iNumErrors].lpcReceived = caLine;
-		errors[iNumErrors].lpcReference = hashGet(hSession->hStaleMFTs, p->eeCert.aki);
 		iNumErrors++;
 	}
 
-	dumpErrors(hSession, errors, p->eeCert.aki);
+	dumpErrors(hSession, ORIGIN_ROA, errors, p->eeCert.aki);
 	free(errors);
 
 	if (hSession->iOptOutput == OPT_OUTPUT_TEXT) {

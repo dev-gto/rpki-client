@@ -25,8 +25,14 @@
 #define OPT_OUTPUT_TEXT 0
 #define OPT_OUTPUT_JS_MONITOR 1
 
+#define ERR_ORIGIN_UNDEFINED 0
+#define ERR_ORIGIN_MFT       1
+#define ERR_ORIGIN_CER       2
+#define ERR_ORIGIN_CRL       3
+#define ERR_ORIGIN_ROA       4
 typedef struct {
     int iCode;
+    int iOrigin;
     char *lpcDescription;
     char *lpcReceived;
     char *lpcReference;
@@ -42,6 +48,8 @@ typedef struct Session
     char *lpcLocalRepository;       // Base directory for using with iOptRecursive
     char *lpcCurrentFilename;       // Current file being processed
 	STACK_OF(OPENSSL_STRING) *filenames; // List of filenames to process (index zero record to be processed first)
+    HHASH hCertFilenames;           // Hash key: certificate SKI; value: corresponding filename
+    HHASH hCertSerialNumbers;       // Hash key: certificate SKI; value: corresponding serial number
     HHASH hASNs;                    // Hash key: certificate SKI; value: string of asns
     HHASH hV4s;                     // Hash key: certificate SKI; value: string of IPv4s
     HHASH hV6s;                     // Hash key: certificate SKI; value: string of IPv6s

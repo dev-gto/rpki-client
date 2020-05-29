@@ -64,7 +64,7 @@ ARCH=$(shell uname -s|tr A-Z a-z)
 ifeq ($(ARCH), linux)
 	# Linux.
 	LDADD += `pkg-config --libs openssl` -lresolv 
-	CFLAGS += -Wno-sign-compare -Wno-cpp -Wno-discarded-qualifiers -Wno-pointer-sign -fomit-frame-pointer -fstrict-aliasing -fstack-protector `pkg-config --cflags openssl` -D_LINUX
+	CFLAGS += -Wno-discarded-qualifiers -Wno-pointer-sign -fomit-frame-pointer -fstrict-aliasing -fstack-protector `pkg-config --cflags openssl` -D_LINUX
 else ifeq ($(ARCH), freebsd)
 	CFLAGS += -I/usr/include/openssl -Wno-strict-prototypes -Wno-implicit-function-declaration -Wno-incompatible-pointer-types-discards-qualifiers -Wno-ignored-qualifiers -Wno-pointer-sign -fomit-frame-pointer -fstrict-aliasing -fstack-protector -D_NSIG=NSIG -D_FREEBSD
 	LDADD += -lssl -lcrypto

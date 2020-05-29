@@ -229,6 +229,21 @@ static void dumpErrors(HSESSION hSession, int iOrigin, Error *errors, char *aki)
 	}
 }
 
+static int hostnameStatus(char *lpcHostname) 
+{
+	int iResult;
+	struct addrinfo hints = {}, *addrs = NULL;
+
+	hints.ai_family = AF_INET;
+	hints.ai_socktype = SOCK_STREAM;
+
+	iResult = getaddrinfo(lpcHostname , NULL, &hints, &addrs);
+	if (iResult == 0) {
+		freeaddrinfo(addrs);
+	}
+	return iResult;
+}
+
 void print_cert(HSESSION hSession, const struct cert *p)
 {
 	int iNumErrors;
@@ -346,7 +361,7 @@ void print_cert(HSESSION hSession, const struct cert *p)
 			*lpcSep = 0;
 			iValidHostname = hashGetAsInt(hSession->hHostnames, lpcBasename);
 			if (iValidHostname == 0) { // Not in cache
-				if (strcasecmp(lpcBasename, "localhost") == 0 || strcmp(lpcBasename, "127.0.0.1") == 0 || gethostbyname(lpcBasename) == NULL) {
+				if (strcasecmp(lpcBasename, "localhost") == 0 || strcmp(lpcBasename, "127.0.0.1") == 0 || hostnameStatus(lpcBasename) != 0) {
 					iValidHostname = 2;
 				} 
 				else {
@@ -457,7 +472,7 @@ void print_crl (HSESSION hSession, X509_CRL *p)
 	int iNumErrors;
 	char caRevocationDate[64];
 	char caLast[64], caNext[64], caNow[64];
-	char *issuerName;
+	char *issuerName, *aki;
 	time_t now;
 	struct tm tm;
 	ASN1_INTEGER *n;
@@ -494,7 +509,9 @@ void print_crl (HSESSION hSession, X509_CRL *p)
 		iNumErrors++;
 	}
 
-	dumpErrors(hSession, ORIGIN_CRL, errors, x509_crl_get_aki(p));
+	aki = x509_crl_get_aki(p);
+	dumpErrors(hSession, ORIGIN_CRL, errors, aki);
+	free(aki);
 
 	if (hSession->iOptOutput == OPT_OUTPUT_TEXT) {
 		printf("%*.*s: %s\n", TAB, TAB, "Now", caNow);

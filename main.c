@@ -45,7 +45,9 @@
 #include "config.h"
 #include "site.h"
 
-#include <sys/queue.h>
+#if HAVE_SYS_QUEUE
+# include <sys/queue.h>
+#endif
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -56,7 +58,6 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <fnmatch.h>
-#include <fts.h>
 #include <inttypes.h>
 #include <poll.h>
 #if RPKI_PRIVDROP == 1
@@ -872,6 +873,12 @@ proc_parser_mft(struct entity *entp, int force, X509_STORE *store,
 	X509_STORE_CTX_cleanup(ctx);
 	sk_X509_free(chain);
 	X509_free(x509);
+
+	if (!mft_check(entp->uri, mft)) {
+		mft_free(mft);
+		return NULL;
+	}
+
 	return mft;
 }
 
@@ -1013,7 +1020,7 @@ proc_parser_crl(struct entity *entp, X509_STORE *store,
 		crl->x509_crl = x509_crl;
 
 		if (RB_INSERT(crl_tree, crlt, crl) != NULL) {
-			warnx("%s: dup aki %s", __func__, crl->aki);
+			warnx("%s: duplicate AKI %s", entp->uri, crl->aki);
 			free_crl(crl);
 		}
 	}
@@ -1380,7 +1387,7 @@ main(int argc, char *argv[])
 	char		*bind_addr = NULL;
 	const char	*cachedir = NULL;
 	const char	*tals[TALSZ_MAX];
-	const char	*bird_tablename = "roa";
+	const char	*bird_tablename = "ROAS";
 	struct vrp_tree	 v = RB_INITIALIZER(&v);
 
 	/* 
@@ -1679,18 +1686,12 @@ main(int argc, char *argv[])
 		roa_free(out[i]);
 	free(out);
 
-#if 0
-	EVP_cleanup();
-	CRYPTO_cleanup_all_ex_data();
-	ERR_free_strings();
-#endif
-
 	return rc;
 
 usage:
 	fprintf(stderr,
-	    "usage: rpki-client [-Bcfjnov] [-b bind_addr] [-d cachedir]"
+	    "usage: rpki-client [-Bcfjnov] [-b sourceaddr] [-d cachedir]"
 	    " [-e rsync_prog]\n"
-	    "            [-T table] [-t tal] [outputdir]\n");
+	    "                   [-T table] [-t tal] [outputdir]\n");
 	return 1;
 }

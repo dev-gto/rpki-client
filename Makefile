@@ -2,19 +2,24 @@ include Makefile.configure
 
 # If set to zero, privilege-dropping is disabled and RPKI_PRIVDROP_USER
 # is not used.  Otherwise, privileges are dropped.
+
 RPKI_PRIVDROP		= 1
 RPKI_PRIVDROP_USER	= "_rpki-client"
 
 # Command to invoke for rsync.  Must be in user's path.
+
 RPKI_RSYNC_COMMAND	= "openrsync"
 
 # Where to place output files.
+
 RPKI_PATH_OUT_DIR	= "/var/db/rpki-client"
 
 # Where repositories are stored.
+
 RPKI_PATH_BASE_DIR	= "/var/cache/rpki-client"
 
 # Where TAL files are found.
+
 RPKI_TAL_DIR		= "/etc/rpki"
 
 OBJS = as.o \
@@ -59,7 +64,7 @@ ARCH=$(shell uname -s|tr A-Z a-z)
 ifeq ($(ARCH), linux)
 	# Linux.
 	LDADD += `pkg-config --libs openssl` -lresolv 
-	CFLAGS += -Wno-discarded-qualifiers -Wno-pointer-sign -fomit-frame-pointer -fstrict-aliasing -fstack-protector `pkg-config --cflags openssl` -D_LINUX
+	CFLAGS += -Wno-sign-compare -Wno-cpp -Wno-discarded-qualifiers -Wno-pointer-sign -fomit-frame-pointer -fstrict-aliasing -fstack-protector `pkg-config --cflags openssl` -D_LINUX
 else ifeq ($(ARCH), freebsd)
 	CFLAGS += -I/usr/include/openssl -Wno-strict-prototypes -Wno-implicit-function-declaration -Wno-incompatible-pointer-types-discards-qualifiers -Wno-ignored-qualifiers -Wno-pointer-sign -fomit-frame-pointer -fstrict-aliasing -fstack-protector -D_NSIG=NSIG -D_FREEBSD
 	LDADD += -lssl -lcrypto
@@ -76,7 +81,7 @@ site.h: Makefile
 	 echo "#define RPKI_PATH_OUT_DIR \"${RPKI_PATH_OUT_DIR}\"" ; \
 	 echo "#define RPKI_PATH_BASE_DIR \"${RPKI_PATH_BASE_DIR}\"" ; \
 	 echo "#define RPKI_PRIVDROP ${RPKI_PRIVDROP}" ; \
-	 echo "#define RPKI_PRIVDROP_USER \"${RPKI_PROVDROP_USER}\"" ; \
+	 echo "#define RPKI_PRIVDROP_USER \"${RPKI_PRIVDROP_USER}\"" ; \
 	 echo "#define RPKI_TAL_DIR \"${RPKI_TAL_DIR}\"" ; ) >$@
 
 site.sed: Makefile
@@ -107,6 +112,19 @@ clean:
 
 distclean: clean
 	rm -f config.h config.log Makefile.configure
+
+distcheck:
+	mandoc -Tlint -Werror rpki-client.8
+	rm -rf .distcheck
+	mkdir .distcheck
+	cp *.c extern.h rpki-client.8 configure Makefile .distcheck
+	( cd .distcheck && ./configure PREFIX=prefix )
+	( cd .distcheck && $(MAKE) )
+	( cd .distcheck && $(MAKE) install )
+	rm -rf .distcheck
+
+regress:
+	# Do nothing.
 
 $(ALLOBJS): extern.h config.h site.h
 

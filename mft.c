@@ -20,11 +20,13 @@
 #include <err.h>
 #include <stdarg.h>
 #include <stdint.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
 #include <openssl/ssl.h>
+#include <openssl/sha.h>
 
 #include "extern.h"
 
@@ -151,6 +153,7 @@ mft_parse_filehash(struct parse *p, const ASN1_OCTET_STRING *os)
 	    strcasecmp(fn + sz - 4, ".gbr") &&
 	    strcasecmp(fn + sz - 4, ".crl") &&
 	    strcasecmp(fn + sz - 4, ".cer")) {
+		/* ignore unknown files */
 		free(fn);
 		fn = NULL;
 		rc = 1;
@@ -242,7 +245,7 @@ mft_parse_econtent(const unsigned char *d, size_t dsz, struct parse *p, int forc
 	const ASN1_TYPE		*t;
 	struct tm			tm;
 	const ASN1_GENERALIZEDTIME *from, *until;
-	int			 i, rc = -1;
+	int			 i, rc = -1, validity;
 	time_t			 this, next;
 
 	if ((seq = d2i_ASN1_SEQUENCE_ANY(NULL, &d, dsz)) == NULL) {
@@ -313,8 +316,8 @@ mft_parse_econtent(const unsigned char *d, size_t dsz, struct parse *p, int forc
 	}
 	until = t->value.generalizedtime;
 
-	rc = check_validity(from, until, p->fn, force);
-	if (rc != 1)
+	validity = check_validity(from, until, p->fn, force);
+	if (validity != 1)
 		goto out;
 
 	tm = asn1Time2Time(from);
@@ -353,7 +356,7 @@ mft_parse_econtent(const unsigned char *d, size_t dsz, struct parse *p, int forc
 	} else if (!mft_parse_flist(p, t->value.octet_string))
 		goto out;
 
-	rc = 1;
+	rc = validity;
 out:
 	sk_ASN1_TYPE_pop_free(seq, ASN1_TYPE_free);
 	return rc;
@@ -423,6 +426,65 @@ out:
 	}
 	free(cms);
 	return p.res;
+}
+
+/*
+ * Check the hash value of a file.
+ * Return zero on failure, non-zero on success.
+ */
+static int
+mft_validfilehash(const char *fn, const struct mftfile *m)
+{
+	char	filehash[SHA256_DIGEST_LENGTH];
+	char	buffer[8192];
+	char	*cp, *path = NULL;
+	SHA256_CTX ctx;
+	ssize_t	nr;
+	int	fd;
+
+	/* Check hash of file now, but first build path for it */
+	cp = strrchr(fn, '/');
+	assert(cp != NULL);
+	if (asprintf(&path, "%.*s/%s", (int)(cp - fn), fn, m->file) == -1)
+		err(1, "asprintf");
+
+	if ((fd = open(path, O_RDONLY)) == -1) {
+		warn("%s: referenced file %s", fn, m->file);
+		free(path);
+		return 0;
+	}
+	free(path);
+
+	SHA256_Init(&ctx);
+	while ((nr = read(fd, buffer, sizeof(buffer))) > 0) {
+		SHA256_Update(&ctx, buffer, nr);
+	}
+	close(fd);
+
+	SHA256_Final(filehash, &ctx);
+	if (memcmp(m->hash, filehash, SHA256_DIGEST_LENGTH) != 0) {
+		warnx("%s: bad message digest for %s", fn, m->file);
+		return 0;
+	}
+
+	return 1;
+}
+
+/*
+ * Check all files and their hashes in a MFT structure.
+ * Return zero on failure, non-zero on success.
+ */
+int
+mft_check(const char *fn, struct mft *p)
+{
+	size_t	i;
+	int	rc = 1;
+
+	for (i = 0; i < p->filesz; i++)
+		if (!mft_validfilehash(fn, &p->files[i]))
+			rc = 0;
+
+	return rc;
 }
 
 /*

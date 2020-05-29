@@ -18,14 +18,21 @@ To wit, it implements RPKI components necessary for validating route
 statements and omits superfluities (such as, for example, which X509
 certificate sections must be labelled "Critical").
 
-The system runs on modern UNIX operating systems with the the
+The system runs on most modern UNIX operating systems with the the
 [OpenSSL](https://www.openssl.org) external library installed, version
-1.1 and above.
+1.1.1c and above.
+Beyond that it requires only
+[BSD make](https://man.openbsd.org/make), usually called `bmake` on systems
+where [GNU make](https://www.gnu.org/software/make) is the default.
 See [Portability](#portability) for details.
+
 The reference operating system is [OpenBSD](https://www.openbsd.org),
 which we strongly suggest for all installations for security reasons.
 It will support [LibreSSL](https://www.libressl.org/) once the library
 gains CMS parsing.
+
+It has been tested on OpenBSD, FreeBSD, Linux (glibc and musl), and
+IllumOS.  Solaris, NetBSD, and Mac OS X require some portability work.
 
 See the [TODO](TODO.md) file for open questions regarding RPKI operation
 in general.
@@ -44,43 +51,29 @@ It was funded by [NetNod](https://www.netnod.se),
 # Installation
 
 First, you'll need a recent [OpenSSL](https://www.openssl.org/) library
-(version 1.1 and above) on your operating system.  At this point, just
+(version 1.1.1c and above) on your operating system.  At this point, just
 run the following.  The installation rule will install into `PREFIX`,
-defaulting to */usr/local*.
+defaulting to */usr/local*, which you may override:
 
 ```
-% ./configure
+% ./configure PREFIX=/opt/local
 % make
 # make install
 ```
 
-It may be necessary to pass `pkg-config` values for OpenSSL to the
-configure script.
+If your `pkg-config` for OpenSSL 1.1.1c and above isn't `openssl` (or
+`eopenssl11` for OpenBSD), pass the proper name as a build option.
+For example, using `openssl111`:
 
 ```
-% ./configure CPPFLAGS="`pkg-config --cflags openssl`" \
-> LDFLAGS="`pkg-config --libs-only-L openssl`" \
-> LDADD="`pkg-config --libs-only-l openssl`"
+% ./configure
+% make PKG_OPENSSL=openssl111
 ```
 
-On OpenBSD, the package is `eopenssl11`, but using `pkg-config` for this
-will produce the wrong values for OpenBSD 6.6 and before.  You'll need
-to hardcode the values yourself.  On FreeBSD, you'll need to install
-both the `openssl111` and `pkgconf` packages.
-
-If you're packaging the software, these may be put directly into a
-*configure.local* script, which overrides the variables during
-configuration.  For example:
-
-```
-CPPFLAGS="`pkg-config --cflags openssl`"
-# FreeBSD's make(1) doesn't respect CPPFLAGS.
-# CFLAGS="${CFLAGS} `pkg-config --cflags openssl`"
-LDFLAGS="`pkg-config --libs-only-L openssl`"
-LDADD="`pkg-config --libs-only-l openssl`"
-```
-
-Most Linux systems additionally need `-lresolv` for `LDADD`.
+This value may also be hard-coded in the
+[Makefile](https://github.com/kristapsdz/rpki-client/blob/master/Makefile).
+**If your system consistently uses a different package name, please
+raise an issue to let us know.**
 
 Next, you'll need the */var/cache/rpki-client* directory in place.
 It must be writable by the operator of **rpki-client**.  The default
@@ -105,7 +98,7 @@ Alternatively, override the variables when invoking `make`, e.g.,
 You'll also need [openrsync(1)](https://man.openbsd.org/openrsync.1) or
 [rsync](https://rsync.samba.org/) as specified with the **-e** argument.
 To hardcode an alternate rsync implementation, set the
-`RPKI_RSYNC_PROGRAM` value in the
+`RPKI_RSYNC_COMMAND` value in the
 [Makefile](https://github.com/kristapsdz/rpki-client/blob/master/Makefile).
 
 In the following, the first uses a custom TAL file, while the second
@@ -223,7 +216,7 @@ processed.
 ## Trust anchor validation
 
 A trust anchor is an X509 ([RFC
-6487](https://tools.ietf.org/html/rfc6487) certificate given by the TAL
+6487](https://tools.ietf.org/html/rfc6487)) certificate given by the TAL
 file.
 Beyond the usual certificate parsing in [cert.c](cert.c), the trust
 anchor files also have a number of additional constraints imposed in
@@ -292,7 +285,7 @@ A "stale" ROA (time validity has elapsed) is also ignored.
 
 ## Certificate validation
 
-X509 certificates ([RFC 6487](https://tools.ietf.org/html/rfc6487) certificate
+X509 certificates ([RFC 6487](https://tools.ietf.org/html/rfc6487)) certificate
 are the mainstay of RPKI's validation.
 They are parsed in [cert.c](cert.c) with further validation being
 performed in [validate.c](validate.c).
@@ -320,9 +313,16 @@ and thousands of entries.  These take quite some time to parse.
 
 The **rpki-client** is portable to the extent that it will compile and
 run on most modern UNIX systems.
-To date it is known to compile on GNU/Linux, FreeBSD, and OpenBSD.
+To date it is known to compile on GNU/Linux (musl, glibc), FreeBSD, 
+OpenBSD, and IllumOS (OmniOS).  Portability efforst are underway to NetBSD,
+Darwin (Mac OS X), and Solaris, all of which are missing
+[ppoll(2)](https://man.openbsd.org/ppoll) and in the latter case,
+[mkostemp](https://man.openbsd.org/mkostemp).
+
 It uses [oconfigure](https://github.com/kristapsdz/oconfigure) for its
-compatibility layer.
+compatibility layer and
+[minci](https://kristaps.bsd.lv/cgi-bin/minci.cgi?project-name=rpki-client)
+for continuous integration.
 
 However, the system depends heavily on OpenBSD's security mechanisms
 (only enabled on OpenBSD installations) to safely and securely parse

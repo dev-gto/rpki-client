@@ -45,10 +45,10 @@
 int
 ip_addr_afi_parse(const char *fn, const ASN1_OCTET_STRING *p, enum afi *afi)
 {
-	short	 v;
+	uint16_t v;
 
 	if (p->length == 0 || p->length > 3) {
-		log_warnx("%s: invalid field length, want 1--3, have %d",
+		warnx("%s: invalid field length, want 1--3, have %d",
 		    fn, p->length);
 		return 0;
 	}

@@ -258,9 +258,8 @@ void print_cert(HSESSION hSession, const struct cert *p)
 	char *lpcSep;
 	size_t	 i;
 	char	 buf1[64], buf2[64];
-	char caNotAfter[64], caNotBefore[64], caNow[64], caStale[64];
+	char caNotAfter[64], caNotBefore[64], caNow[64];
 	time_t now;
-	time_t stale;
 	struct tm *tm;
 	struct stat st;
 	Error errors[8];
@@ -292,18 +291,6 @@ void print_cert(HSESSION hSession, const struct cert *p)
 		errors[iNumErrors].lpcReceived = caNotAfter;
 		errors[iNumErrors].lpcReference = caNow;
 		iNumErrors++;
-	}
-	else if (hSession->iOptAboutToStaleSeconds > 0) {
-		stale = p->basic.notAfter - hSession->iOptAboutToStaleSeconds;
-		tm = gmtime(&stale);
-		strftime(caStale, sizeof(caStale)-1, MSK_TIME_FORMAT, tm);
-		if (strcmp(caNow, caStale) > 0) {
-			errors[iNumErrors].iCode = JS_STS_ERROR_ABOUT_TO_STALE;
-			errors[iNumErrors].lpcDescription = "notAfter about to stale";
-			errors[iNumErrors].lpcReceived = caNotAfter;
-			errors[iNumErrors].lpcReference = caStale;
-			iNumErrors++;
-		}
 	}
 
 	if (hSession->iOptRecursive) {
@@ -622,6 +609,18 @@ void print_mft(HSESSION hSession, const struct mft *p)
 		errors[iNumErrors].lpcReference = caNow;
 		iNumErrors++;
 	}
+	else if (hSession->iOptAboutToStaleSeconds > 0) {
+		stale = p->nextUpdate - hSession->iOptAboutToStaleSeconds;
+		tm = gmtime(&stale);
+		strftime(caStale, sizeof(caStale)-1, MSK_TIME_FORMAT, tm);
+		if (strcmp(caNow, caStale) > 0) {
+			errors[iNumErrors].iCode = JS_STS_ERROR_ABOUT_TO_STALE;
+			errors[iNumErrors].lpcDescription = "nextUpdate about to stale";
+			errors[iNumErrors].lpcReceived = caNext;
+			errors[iNumErrors].lpcReference = caStale;
+			iNumErrors++;
+		}
+	}
 	if (strcmp(caNow, caNotBefore) < 0) {
 		errors[iNumErrors].iCode = JS_STS_ERROR_NOT_BEFORE;
 		errors[iNumErrors].lpcDescription = "notBefore not yet valid";
@@ -635,18 +634,6 @@ void print_mft(HSESSION hSession, const struct mft *p)
 		errors[iNumErrors].lpcReceived = caNotAfter;
 		errors[iNumErrors].lpcReference = caNow;
 		iNumErrors++;
-	}
-	else if (hSession->iOptAboutToStaleSeconds > 0) {
-		stale = p->eeCert.notAfter - hSession->iOptAboutToStaleSeconds;
-		tm = gmtime(&stale);
-		strftime(caStale, sizeof(caStale)-1, MSK_TIME_FORMAT, tm);
-		if (strcmp(caNow, caStale) > 0) {
-			errors[iNumErrors].iCode = JS_STS_ERROR_ABOUT_TO_STALE;
-			errors[iNumErrors].lpcDescription = "notAfter about to stale";
-			errors[iNumErrors].lpcReceived = caNotAfter;
-			errors[iNumErrors].lpcReference = caStale;
-			iNumErrors++;
-		}
 	}
 
 	dumpErrors(hSession, ORIGIN_MFT, errors, p->eeCert.aki);
@@ -734,9 +721,8 @@ void print_roa(HSESSION hSession, const struct roa *p)
 	int iNumErrors;
 	char	 buf[256];
 	size_t	 i;
-	char caNotAfter[64], caNotBefore[64], caNow[64], caStale[64];
+	char caNotAfter[64], caNotBefore[64], caNow[64];
 	time_t now;
-	time_t stale;
 	struct tm *tm;
 	Error *errors;
 
@@ -771,18 +757,6 @@ void print_roa(HSESSION hSession, const struct roa *p)
 		errors[iNumErrors].lpcReceived = caNotAfter;
 		errors[iNumErrors].lpcReference = caNow;
 		iNumErrors++;
-	}
-	else if (hSession->iOptAboutToStaleSeconds > 0) {
-		stale = p->eeCert.notAfter - hSession->iOptAboutToStaleSeconds;
-		tm = gmtime(&stale);
-		strftime(caStale, sizeof(caStale)-1, MSK_TIME_FORMAT, tm);
-		if (strcmp(caNow, caStale) > 0) {
-			errors[iNumErrors].iCode = JS_STS_ERROR_ABOUT_TO_STALE;
-			errors[iNumErrors].lpcDescription = "notAfter about to stale";
-			errors[iNumErrors].lpcReceived = caNotAfter;
-			errors[iNumErrors].lpcReference = caStale;
-			iNumErrors++;
-		}
 	}
 
 	if (hashGet(hSession->hStaleMFTs, p->eeCert.aki)) {

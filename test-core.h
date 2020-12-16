@@ -38,6 +38,7 @@ typedef struct Session
 {
     int iOptRecursive;              // 1 - navigate through the internal file references
     int iOptOutput;                 // One of OPT_OUTPUT_*
+    int iOptAboutToStaleSeconds;    // >0 - should verify objects about to become stale in iOptAboutToStaleSeconds.
     int iNumErrorsFound;
     char *lpcLocalRepository;       // Base directory for using with iOptRecursive
     char *lpcCurrentFilename;       // Current file being processed

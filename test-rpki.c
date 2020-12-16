@@ -36,6 +36,7 @@
 #define STS_ERROR_MISSING_PARAMS     1
 #define STS_ERROR_NO_INPUT_FILES     2
 #define STS_ERROR_INVALID_DIRECTORY  3
+#define STS_ERROR_INVALID_PARAMETER  4
 
 static void usage(int iSts) {
     printf("%s %s - dump information from .cer, .crl, .mft, .roa and .tal files.\n", APP_NAME, APP_VERSION);
@@ -55,10 +56,12 @@ static void usage(int iSts) {
     printf("Usage: %s [options] <files>\n\n"
            "  -h, --help                     Displays this help text.\n"
            "  -r, --recursive                Recursive. Follows internal file references.\n"
-		   "  -f <format>                    Format output"
+		   "  -f <format>                    Format output\n"
 		   "                                    TEXT    - default\n"
 		   "                                    MONITOR - JSON format containing only\n"
-		   "  --local-repository <directory> Directory where the repository local cache will be read\n"
+           "  -s, --about-to-stale <seconds> Also consider objets about to become stale in <seconds>.\n"
+           "                                 Default: 0 (disabled)\n"
+		   "  --local-repository <directory> Directory where the repository local cache will be read.\n"
 		   "\n"
 		   , APP_NAME
 		   );
@@ -94,6 +97,20 @@ static int loadArguments(HSESSION hSession, int argc, char *argv [ ]) {
 		{
 			hSession->iOptRecursive = 1;
 			continue;
+		}
+		if (strcmp (argv[iargv], "-s") == 0 || strcmp (argv[iargv], "--about-to-stale") == 0)
+		{
+			lpcValue = &argv[iargv][2];
+			if (!*lpcValue)
+				lpcValue = argv[++iargv];
+			if (lpcValue != NULL) {
+				hSession->iOptAboutToStaleSeconds = atoi(lpcValue);
+				if (hSession->iOptAboutToStaleSeconds > 0) {
+					continue;
+				}
+			}
+			iSts = STS_ERROR_INVALID_PARAMETER;
+			break;
 		}
 
 		if (memcmp (argv[iargv], "-f", 2) == 0)

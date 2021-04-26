@@ -139,6 +139,13 @@ static void print_sep_line (const char *title)
 	printf("\n");
 }
 
+static int hasResources(HSESSION hSession, char *lpcAKI) {
+	if (hashGet(hSession->hASNs, lpcAKI) || hashGet(hSession->hV4s, lpcAKI) || hashGet(hSession->hV6s, lpcAKI)) {
+		return 1;
+	}
+	return 0;
+}
+
 static void dumpErrors(HSESSION hSession, int iOrigin, Error *errors, char *aki)
 {
 	Error *lpcError;
@@ -172,17 +179,20 @@ static void dumpErrors(HSESSION hSession, int iOrigin, Error *errors, char *aki)
 			lpcSep="";
 			if (aki != NULL) {
 				if (iOrigin == ORIGIN_MFT) {
-					printf("\t\t\t\"parent\": {\n");
-					printf("\t\t\t\t\"type\":\"cer\"");
-					lpcData = hashGet(hSession->hCertFilenames, aki);
-					if (lpcData) {
-						printf(",\n\t\t\t\t\"filename\":\"%s\"", lpcData);
+					// at stage 1 we have a missing certificate
+					if (hSession->iStage != 1) {
+						printf("\t\t\t\"parent\": {\n");
+						printf("\t\t\t\t\"type\":\"cer\"");
+						lpcData = hashGet(hSession->hCertFilenames, aki);
+						if (lpcData) {
+							printf(",\n\t\t\t\t\"filename\":\"%s\"", lpcData);
+						}
+						lpcData = hashGet(hSession->hCertSerialNumbers, aki);
+						if (lpcData) {
+							printf(",\n\t\t\t\t\"serial\":\"%s\"", lpcData);
+						}
+						printf("\n\t\t\t},\n");
 					}
-					lpcData = hashGet(hSession->hCertSerialNumbers, aki);
-					if (lpcData) {
-						printf(",\n\t\t\t\t\"serial\":\"%s\"", lpcData);
-					}
-					printf("\n\t\t\t},\n");
 				} else if (iOrigin == ORIGIN_CRL || iOrigin == ORIGIN_ROA) {
 					printf("\t\t\t\"parent\": {\n");
 					printf("\t\t\t\t\"type\":\"mft\"");
@@ -193,23 +203,25 @@ static void dumpErrors(HSESSION hSession, int iOrigin, Error *errors, char *aki)
 					printf("\n\t\t\t},\n");
 				}
 
-				printf("\t\t\t\"resources\": {\n");
-				lpcASNs = hashGet(hSession->hASNs, aki);
-				if (lpcASNs) {
-					printf("%s\t\t\t\t\"asn\":\"%s\"", lpcSep, lpcASNs);
-					lpcSep=",\n";
+				if (hasResources(hSession, aki)) {
+					printf("\t\t\t\"resources\": {\n");
+					lpcASNs = hashGet(hSession->hASNs, aki);
+					if (lpcASNs) {
+						printf("%s\t\t\t\t\"asn\":\"%s\"", lpcSep, lpcASNs);
+						lpcSep=",\n";
+					}
+					lpcIPs = hashGet(hSession->hV4s, aki);
+					if (lpcIPs != NULL) {
+						printf("%s\t\t\t\t\"v4\":\"%s\"", lpcSep, lpcIPs);
+						lpcSep=",\n";
+					}
+					lpcIPs = hashGet(hSession->hV6s, aki);
+					if (lpcIPs != NULL) {
+						printf("%s\t\t\t\t\"v6\":\"%s\"", lpcSep, lpcIPs);
+						lpcSep=",\n";
+					}
+					printf("\n\t\t\t},\n");
 				}
-				lpcIPs = hashGet(hSession->hV4s, aki);
-				if (lpcIPs != NULL) {
-					printf("%s\t\t\t\t\"v4\":\"%s\"", lpcSep, lpcIPs);
-					lpcSep=",\n";
-				}
-				lpcIPs = hashGet(hSession->hV6s, aki);
-				if (lpcIPs != NULL) {
-					printf("%s\t\t\t\t\"v6\":\"%s\"", lpcSep, lpcIPs);
-					lpcSep=",\n";
-				}
-				printf("\n\t\t\t},\n");
 			}
 			printf("\t\t\t\"errors\":[");
 			lpcSep="";
@@ -950,6 +962,7 @@ static void processFile(HSESSION hSession, char *lpcFilename) {
 
 static void getMissingFiles(HSESSION hSession, char *lpcDirectory) {
 	int iFlgFreeFilename;
+	size_t sz;
     DIR *dir;
 	char *lpcFilename;
     struct dirent *entry;
@@ -969,10 +982,14 @@ static void getMissingFiles(HSESSION hSession, char *lpcDirectory) {
 	            getMissingFiles(hSession, lpcFilename);
 			}
         } else if (!hashGetAsInt(hSession->hProcessed, lpcFilename)) {
-			if (stat (lpcFilename, &st) == 0 && (S_ISREG(st.st_mode) || S_ISLNK(st.st_mode))) {
-				sk_OPENSSL_STRING_push(hSession->filenames, lpcFilename);
-				iFlgFreeFilename = 0;
-			} 
+			// For now only consider .mft files
+			sz = strlen(lpcFilename);
+			if (strcasecmp(lpcFilename + sz - 4, ".mft") == 0) {
+				if (stat (lpcFilename, &st) == 0 && (S_ISREG(st.st_mode) || S_ISLNK(st.st_mode))) {
+					sk_OPENSSL_STRING_push(hSession->filenames, lpcFilename);
+					iFlgFreeFilename = 0;
+				}
+			}
         }
 		if (iFlgFreeFilename) {
 			free(lpcFilename);

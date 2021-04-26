@@ -532,6 +532,19 @@ void print_crl (HSESSION hSession, X509_CRL *p)
 	}
 
 	aki = x509_crl_get_aki(p);
+	issuerName = X509_NAME_oneline(X509_CRL_get_issuer(p), NULL, 0);
+
+	if (hSession->iStage == 1) {
+		errors[iNumErrors].iCode = JS_STS_ERROR_MISSING_CERTIFICATE;
+		errors[iNumErrors].lpcDescription = "missing certificate";
+		if (issuerName != NULL) {
+			errors[iNumErrors].lpcReceived = issuerName;
+		} else {
+			errors[iNumErrors].lpcReceived = aki;
+		}
+		iNumErrors++;
+	}
+
 	dumpErrors(hSession, ORIGIN_CRL, errors, aki);
 	free(aki);
 
@@ -546,10 +559,8 @@ void print_crl (HSESSION hSession, X509_CRL *p)
 			ASN1_INTEGER_free(n);
 		}
 
-		issuerName = X509_NAME_oneline(X509_CRL_get_issuer(p), NULL, 0);
 		if (issuerName != NULL) {
 			printf("%*.*s: %s\n", TAB, TAB, "Issuer", issuerName);
-			OPENSSL_free(issuerName);
 		}
 
 		printf("%*.*s: %s\n", TAB, TAB, "Last Update", caLast);
@@ -577,6 +588,9 @@ void print_crl (HSESSION hSession, X509_CRL *p)
 			}
 		}
 		printf("\n");
+	}
+	if (issuerName != NULL) {
+		OPENSSL_free(issuerName);
 	}
 }
 
@@ -809,6 +823,12 @@ void print_roa(HSESSION hSession, const struct roa *p)
 		strcat (caLine, ";");
 
 		errors[iNumErrors].lpcReceived = caLine;
+		iNumErrors++;
+	}
+	if (hSession->iStage == 1) {
+		errors[iNumErrors].iCode = JS_STS_ERROR_MISSING_CERTIFICATE;
+		errors[iNumErrors].lpcDescription = "missing certificate";
+		errors[iNumErrors].lpcReceived = p->eeCert.issuerName;
 		iNumErrors++;
 	}
 

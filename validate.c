@@ -20,7 +20,9 @@
 
 #include <arpa/inet.h>
 #include <assert.h>
+#include <ctype.h>
 #include <err.h>
+#include <fcntl.h>
 #include <inttypes.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -54,8 +56,7 @@ valid_as(struct auth *a, uint32_t min, uint32_t max)
 
 	/* Does this certificate cover our AS number? */
 	if (a->cert->asz) {
-		c = as_check_covered(min, max,
-		    a->cert->as, a->cert->asz);
+		c = as_check_covered(min, max, a->cert->as, a->cert->asz);
 		if (c > 0)
 			return 1;
 		else if (c < 0)
@@ -82,8 +83,7 @@ valid_ip(struct auth *a, enum afi afi,
 		return 0;
 
 	/* Does this certificate cover our IP prefix? */
-	c = ip_addr_check_covered(afi, min, max,
-	    a->cert->ips, a->cert->ipsz);
+	c = ip_addr_check_covered(afi, min, max, a->cert->ips, a->cert->ipsz);
 	if (c > 0)
 		return 1;
 	else if (c < 0)
@@ -131,7 +131,7 @@ valid_ta(const char *fn, struct auth_tree *auths, const struct cert *cert)
 		log_warnx("%s: RFC 6487 (trust anchor): "
 		    "inheriting AS resources", fn);
 		return 0;
-	} 
+	}
 	for (i = 0; i < cert->ipsz; i++)
 		if (cert->ips[i].type == CERT_IP_INHERIT) {
 			log_warnx("%s: RFC 6487 (trust anchor): "
@@ -241,6 +241,66 @@ valid_roa(const char *fn, struct auth_tree *auths, struct roa *roa)
 		tracewarn(a);
 		return 0;
 	}
+
+	return 1;
+}
+
+/*
+ * Validate a file by verifying the SHA256 hash of that file.
+ * Returns 1 if valid, 0 otherwise.
+ */
+int
+valid_filehash(const char *fn, const char *hash, size_t hlen)
+{
+	SHA256_CTX ctx;
+	char	filehash[SHA256_DIGEST_LENGTH];
+	char	buffer[8192];
+	ssize_t	nr;
+	int	fd;
+
+	if (hlen != sizeof(filehash))
+		errx(1, "bad hash size");
+
+	if ((fd = open(fn, O_RDONLY)) == -1)
+		return 0;
+
+	SHA256_Init(&ctx);
+	while ((nr = read(fd, buffer, sizeof(buffer))) > 0)
+		SHA256_Update(&ctx, buffer, nr);
+	close(fd);
+
+	SHA256_Final(filehash, &ctx);
+	if (memcmp(hash, filehash, sizeof(filehash)) != 0)
+		return 0;
+
+	return 1;
+}
+
+/*
+ * Validate a URI to make sure it is pure ASCII and does not point backwards
+ * or doing some other silly tricks. To enforce the protocol pass either
+ * https:// or rsync:// as proto, if NULL is passed no protocol is enforced.
+ * Returns 1 if valid, 0 otherwise.
+ */
+int
+valid_uri(const char *uri, size_t usz, const char *proto)
+{
+	size_t s;
+
+	for (s = 0; s < usz; s++)
+		if (!isalnum((unsigned char)uri[s]) &&
+		    !ispunct((unsigned char)uri[s]))
+			return 0;
+
+	if (proto != NULL) {
+		s = strlen(proto);
+		if (strncasecmp(uri, proto, s) != 0)
+			return 0;
+	}
+
+	/* do not allow files or directories to start with a '.' */
+	if (strstr(uri, "/.") != NULL)
+		return 0;
 
 	return 1;
 }

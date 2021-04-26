@@ -784,7 +784,7 @@ proc_parser_roa(struct entity *entp,
 	STACK_OF(X509_CRL)	*crls;
 
 	assert(entp->has_dgst);
-	if ((roa = roa_parse(&x509, entp->uri, entp->dgst)) == NULL)
+	if ((roa = roa_parse(&x509, entp->uri)) == NULL)
 		return NULL;
 
 	a = valid_ski_aki(entp->uri, auths, roa->eeCert.ski, roa->eeCert.aki);
@@ -1006,14 +1006,9 @@ proc_parser_crl(struct entity *entp, X509_STORE *store,
 {
 	X509_CRL		*x509_crl;
 	struct crl		*crl;
-	const unsigned char	*dgst;
-	char			*t;
 
-	dgst = entp->has_dgst ? entp->dgst : NULL;
-	if ((x509_crl = crl_parse(entp->uri, dgst)) != NULL) {
+	if ((x509_crl = crl_parse(entp->uri)) != NULL) {
 		if ((crl = malloc(sizeof(*crl))) == NULL)
-			err(1, NULL);
-		if ((t = strdup(entp->uri)) == NULL)
 			err(1, NULL);
 		if ((crl->aki = x509_crl_get_aki(x509_crl)) == NULL)
 			errx(1, "x509_crl_get_aki failed");

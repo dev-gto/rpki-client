@@ -62,6 +62,7 @@ static void usage(int iSts) {
            "  -s, --about-to-stale <seconds> Also consider objets about to become stale in <seconds>.\n"
            "                                 Default: 0 (disabled)\n"
 		   "  --local-repository <directory> Directory where the repository local cache will be read.\n"
+		   "  --check-cert-dir <directory>   Base directory to scan for missing certificates.\n"
 		   "\n"
 		   , APP_NAME
 		   );
@@ -142,6 +143,25 @@ static int loadArguments(HSESSION hSession, int argc, char *argv [ ]) {
 
 			continue;
 		}
+		if (memcmp (argv[iargv], "--check-cert-dir", 16) == 0)
+		{
+			lpcValue = &argv[iargv][16];
+			if (!*lpcValue)
+				lpcValue = argv[++iargv];
+			if (lpcValue != NULL) {
+				if (stat (lpcValue, &st) == 0 && S_ISDIR(st.st_mode)) {
+					hSession->lpcCheckCertDirectory = lpcValue;
+				}
+				else {
+					iSts = STS_ERROR_INVALID_DIRECTORY;
+					break;
+				}
+			}
+
+			continue;
+		}
+
+		
 	}
 	if (iSts == STS_OK) {
 		if (sk_OPENSSL_STRING_num(hSession->filenames) <= 0) {

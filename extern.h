@@ -35,7 +35,7 @@
   #define ERR_remove_thread_state(NULL) ERR_remove_state(0)
   #define ASN1_STRING_get0_data(a) ASN1_STRING_data(a)
 #endif
-
+#include <openssl/x509.h>
 #include <stdint.h>
 
 #if !HAVE_PLEDGE
@@ -316,13 +316,13 @@ struct mft	*mft_read(int);
 
 void		 roa_buffer(char **, size_t *, size_t *, const struct roa *);
 void		 roa_free(struct roa *);
-struct roa	*roa_parse(X509 **, const char *, const unsigned char *);
+struct roa	*roa_parse(X509 **, const char *);
 struct roa	*roa_read(int);
 void		 roa_insert_vrps(struct vrp_tree *, struct roa *, size_t *,
 		    size_t *);
 
 /* crl.c */
-X509_CRL	*crl_parse(const char *, const unsigned char *);
+X509_CRL	*crl_parse(const char *);
 void		 free_crl(struct crl *);
 
 /* Validation of our objects. */
@@ -334,11 +334,13 @@ int		 valid_ta(const char *, struct auth_tree *,
 int		 valid_cert(const char *, struct auth_tree *,
 		    const struct cert *);
 int		 valid_roa(const char *, struct auth_tree *, struct roa *);
+int		 valid_filehash(const char *, const char *, size_t);
+int		 valid_uri(const char *, size_t, const char *);
 
 /* Working with CMS files. */
 
 unsigned char	*cms_parse_validate(X509 **, const char *,
-			const char *, const unsigned char *, size_t *);
+			const char *, size_t *);
 
 /* Work with RFC 3779 IP addresses, prefixes, ranges. */
 
@@ -389,6 +391,13 @@ void		 cryptoerrx(const char *, ...)
 			__attribute__((format(printf, 1, 2)))
 			__attribute__((noreturn));
 
+/* Encoding functions for hex and base64. */
+
+int		 base64_decode(const unsigned char *, unsigned char **,
+		    size_t *);
+char		*hex_encode(const unsigned char *, size_t);
+
+
 /* Functions for moving data between processes. */
 
 void		 io_socket_blocking(int);
@@ -438,5 +447,7 @@ int		 output_json(FILE *, struct vrp_tree *, void *arg);
 
 void	logx(const char *fmt, ...)
 		    __attribute__((format(printf, 1, 2)));
+
+int	mkpath(const char *);
 
 #endif /* ! EXTERN_H */

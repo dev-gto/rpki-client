@@ -25,8 +25,10 @@
 #include <string.h>
 #include <unistd.h>
 
-#include <openssl/ssl.h>
+#include <openssl/bn.h>
+#include <openssl/asn1.h>
 #include <openssl/sha.h>
+#include <openssl/x509.h>
 
 #include "extern.h"
 
@@ -245,7 +247,9 @@ mft_parse_econtent(const unsigned char *d, size_t dsz, struct parse *p, int forc
 	const ASN1_TYPE		*t;
 	struct tm			tm;
 	const ASN1_GENERALIZEDTIME *from, *until;
-	int			 i, rc = -1, validity;
+	BIGNUM			*mft_seqnum = NULL;
+	long			 mft_version;
+	int			 i, rc = -1;
 	time_t			 this, next;
 
 	if ((seq = d2i_ASN1_SEQUENCE_ANY(NULL, &d, dsz)) == NULL) {
@@ -254,7 +258,7 @@ mft_parse_econtent(const unsigned char *d, size_t dsz, struct parse *p, int forc
 		goto out;
 	}
 
-	/* The version is optional. */
+	/* The profile version is optional. */
 
 	if (sk_ASN1_TYPE_num(seq) != 5 &&
 	    sk_ASN1_TYPE_num(seq) != 6) {
@@ -264,7 +268,7 @@ mft_parse_econtent(const unsigned char *d, size_t dsz, struct parse *p, int forc
 		goto out;
 	}
 
-	/* Start with optional version. */
+	/* Start with optional profile version. */
 
 	i = 0;
 	if (sk_ASN1_TYPE_num(seq) == 6) {
@@ -273,6 +277,16 @@ mft_parse_econtent(const unsigned char *d, size_t dsz, struct parse *p, int forc
 			log_warnx("%s: RFC 6486 section 4.2.1: version: "
 			    "want ASN.1 integer, have %s (NID %d)",
 			    p->fn, ASN1_tag2str(t->type), t->type);
+			goto out;
+		}
+
+		if (t->value.integer == NULL)
+			goto out;
+
+		mft_version = ASN1_INTEGER_get(t->value.integer);
+		if (mft_version != 0) {
+			log_warnx("%s: RFC 6486 section 4.2.1: version: "
+			    "want 0, have %ld", p->fn, mft_version);
 			goto out;
 		}
 	}
@@ -286,6 +300,25 @@ mft_parse_econtent(const unsigned char *d, size_t dsz, struct parse *p, int forc
 		    p->fn, ASN1_tag2str(t->type), t->type);
 		goto out;
 	}
+
+	mft_seqnum = ASN1_INTEGER_to_BN(t->value.integer, NULL);
+	if (mft_seqnum == NULL) {
+		log_warnx("%s: ASN1_INTEGER_to_BN error", p->fn);
+		goto out;
+	}
+
+	if (BN_is_negative(mft_seqnum)) {
+		log_warnx("%s: RFC 6486 section 4.2.1: manifestNumber: "
+		    "want positive integer, have negative.", p->fn);
+		goto out;
+	}
+
+	if (BN_num_bytes(mft_seqnum) > 20) {
+		log_warnx("%s: RFC 6486 section 4.2.1: manifestNumber: "
+		    "want 20 or less than octets, have more.", p->fn);
+		goto out;
+	}
+
 	p->res->manifestNumber = ASN1_INTEGER_get(t->value.integer);
 
 	/*
@@ -293,7 +326,7 @@ mft_parse_econtent(const unsigned char *d, size_t dsz, struct parse *p, int forc
 	 * Validate that the current date falls into this interval.
 	 * This is required by section 4.4, (3).
 	 * If we're after the given date, then the MFT is stale.
-	 * This is made super complicated because it usees OpenSSL's
+	 * This is made super complicated because it uses OpenSSL's
 	 * ASN1_GENERALIZEDTIME instead of ASN1_TIME, which we could
 	 * compare against the current time trivially.
 	 */
@@ -316,9 +349,12 @@ mft_parse_econtent(const unsigned char *d, size_t dsz, struct parse *p, int forc
 	}
 	until = t->value.generalizedtime;
 
-	validity = check_validity(from, until, p->fn, force);
-	if (validity != 1)
+	rc = check_validity(from, until, p->fn, force);
+	if (rc != 1)
 		goto out;
+
+	/* The mft is valid. Reset rc so later 'goto out' return failure. */
+	rc = -1;
 
 	tm = asn1Time2Time(from);
 	this = timegm(&tm);
@@ -356,9 +392,10 @@ mft_parse_econtent(const unsigned char *d, size_t dsz, struct parse *p, int forc
 	} else if (!mft_parse_flist(p, t->value.octet_string))
 		goto out;
 
-	rc = validity;
+	rc = 1;
 out:
 	sk_ASN1_TYPE_pop_free(seq, ASN1_TYPE_free);
+	BN_free(mft_seqnum);
 	return rc;
 }
 
@@ -381,7 +418,7 @@ mft_parse(X509 **x509, const char *fn, int force)
 	p.fn = fn;
 
 	cms = cms_parse_validate(x509, fn, "1.2.840.113549.1.9.16.1.26",
-	    NULL, &cmsz);
+	    &cmsz);
 	if (cms == NULL)
 		return NULL;
 	assert(*x509 != NULL);
@@ -429,48 +466,6 @@ out:
 }
 
 /*
- * Check the hash value of a file.
- * Return zero on failure, non-zero on success.
- */
-static int
-mft_validfilehash(const char *fn, const struct mftfile *m)
-{
-	char	filehash[SHA256_DIGEST_LENGTH];
-	char	buffer[8192];
-	char	*cp, *path = NULL;
-	SHA256_CTX ctx;
-	ssize_t	nr;
-	int	fd;
-
-	/* Check hash of file now, but first build path for it */
-	cp = strrchr(fn, '/');
-	assert(cp != NULL);
-	if (asprintf(&path, "%.*s/%s", (int)(cp - fn), fn, m->file) == -1)
-		err(1, "asprintf");
-
-	if ((fd = open(path, O_RDONLY)) == -1) {
-		warn("%s: referenced file %s", fn, m->file);
-		free(path);
-		return 0;
-	}
-	free(path);
-
-	SHA256_Init(&ctx);
-	while ((nr = read(fd, buffer, sizeof(buffer))) > 0) {
-		SHA256_Update(&ctx, buffer, nr);
-	}
-	close(fd);
-
-	SHA256_Final(filehash, &ctx);
-	if (memcmp(m->hash, filehash, SHA256_DIGEST_LENGTH) != 0) {
-		warnx("%s: bad message digest for %s", fn, m->file);
-		return 0;
-	}
-
-	return 1;
-}
-
-/*
  * Check all files and their hashes in a MFT structure.
  * Return zero on failure, non-zero on success.
  */
@@ -479,10 +474,24 @@ mft_check(const char *fn, struct mft *p)
 {
 	size_t	i;
 	int	rc = 1;
+	char	*cp, *path = NULL;
 
-	for (i = 0; i < p->filesz; i++)
-		if (!mft_validfilehash(fn, &p->files[i]))
+	/* Check hash of file now, but first build path for it */
+	cp = strrchr(fn, '/');
+	assert(cp != NULL);
+	assert(cp - fn < INT_MAX);
+
+	for (i = 0; i < p->filesz; i++) {
+		const struct mftfile *m = &p->files[i];
+		if (asprintf(&path, "%.*s/%s", (int)(cp - fn), fn,
+		    m->file) == -1)
+			err(1, NULL);
+		if (!valid_filehash(path, m->hash, sizeof(m->hash))) {
+			log_warnx("%s: bad message digest for %s", fn, m->file);
 			rc = 0;
+		}
+		free(path);
+	}
 
 	return rc;
 }

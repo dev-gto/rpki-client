@@ -40,7 +40,9 @@ typedef struct Session
     int iOptOutput;                 // One of OPT_OUTPUT_*
     int iOptAboutToStaleSeconds;    // >0 - should verify objects about to become stale in iOptAboutToStaleSeconds.
     int iNumErrorsFound;
+    int iStage;                     // 0 - first pass, normal stage; 1 - second pass, processing missing certificates
     char *lpcLocalRepository;       // Base directory for using with iOptRecursive
+    char *lpcCheckCertDirectory;    // Base directory for checking missing crt (optional)
     char *lpcCurrentFilename;       // Current file being processed
 	STACK_OF(OPENSSL_STRING) *filenames; // List of filenames to process (index zero record to be processed first)
     HHASH hCertFilenames;           // Hash key: certificate SKI; value: corresponding filename
@@ -50,9 +52,8 @@ typedef struct Session
     HHASH hV6s;                     // Hash key: certificate SKI; value: string of IPv6s
     HHASH hStaleMFTs;               // Hash key: certificate AKI; value: int 1 - mft in stale (corresponding ROAs and other files with the same AKI are also considered 'stale')
     HHASH hHostnames;               // Cache of valid hostnames. Hash key: hostname; value: 1 - valid; 2 - invalid
+    HHASH hProcessed;               // Hash key: filename; value: 1 - processed
 } *HSESSION;
-
-void hex_encode (unsigned char *lpcAsc, unsigned char *lpcBcd, size_t szBcd);
 
 void print_cert(HSESSION hSession, const struct cert *p);
 void print_crl(HSESSION hSession, X509_CRL *p);

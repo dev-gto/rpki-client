@@ -28,11 +28,13 @@ OBJS = as.o \
 	   cms.o \
 	   compats.o \
 	   crl.o \
+	   encoding.o \
 	   hash.o \
 	   io.o \
 	   ip.o \
 	   log.o \
 	   mft.o \
+	   mkdir.o \
 	   output.o \
 	   output-bgpd.o \
 	   output-bird.o \
@@ -53,12 +55,7 @@ ALLOBJS	= $(OBJS) \
 	   test-rpki.o \
 	   test-tal.o
 BINS = rpki-client \
-	   test-cert \
-	   test-crl \
-	   test-mft \
-	   test-roa \
-	   test-rpki \
-	   test-tal
+	   test-rpki
 
 ARCH=$(shell uname -s|tr A-Z a-z)
 ifeq ($(ARCH), linux)

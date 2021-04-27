@@ -120,7 +120,8 @@ int hashSetBinary(THash *hHash, char *lpcKey, char *lpcValue, int iValueSize, in
 	if (!hHash)
 		return HASH_ERROR_INVALID_HANDLE;
 
-	strcpy(caKey, lpcKey);
+	memset(caKey, 0, sizeof(caKey));
+	strncpy(caKey, lpcKey, sizeof(caKey)-1);
 
 	h = hHash->hashFunction(caKey, hHash->iSize);
 	for (cur = hHash->table[h].next; cur; cur = cur->next)

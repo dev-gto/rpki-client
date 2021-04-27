@@ -601,7 +601,8 @@ void print_mft(HSESSION hSession, const struct mft *p)
 	char *lpcBasename;
 	char *lpcFilename;
 	char *lpcLocation;
-	size_t	 i;
+	char *lpcSep;
+	size_t	 i, j;
 	unsigned char caSHA256[64 + 1];
 	char caNotAfter[64], caNotBefore[64], caThis[64], caNext[64], caNow[64], caStale[64];
 	time_t now;
@@ -670,11 +671,40 @@ void print_mft(HSESSION hSession, const struct mft *p)
 		errors[iNumErrors].lpcReference = caNow;
 		iNumErrors++;
 	}
-	if (hSession->iStage == 1 && p->filesz > 0) {
-		errors[iNumErrors].iCode = JS_STS_ERROR_MISSING_CERTIFICATE;
-		errors[iNumErrors].lpcDescription = "missing certificate";
-		errors[iNumErrors].lpcReceived = p->eeCert.issuerName;
-		iNumErrors++;
+	if (hSession->iStage == 1) {
+		// Only warn missing certificates if mft is valid
+		if (iNumErrors == 0 && p->filesz > 0) {
+			// Consolidate ASN list
+			char caBuffer[1024];
+			HHASH hASNs;
+			char *lpcKey;
+			hASNs = hashNew(0);
+			if (hASNs != NULL) {
+				// store ASN
+				char caKey[1024];
+				i = hashGetAsInt(hSession->hASNs, p->eeCert.aki);
+				for (j = 0; j < i; j++) {
+					sprintf(caKey, "%s[%lu]", p->eeCert.issuerName, j);
+					hashSet(hASNs, hashGet(hSession->hASNs, caKey), "");
+				}
+				memset (caBuffer, 0, sizeof(caBuffer));
+				lpcSep = "";
+				lpcKey = NULL;
+				while ((lpcKey = hashGetNextKey(hASNs, lpcKey)) != NULL) {
+					sprintf (caBuffer+strlen(caBuffer), "%s%s", lpcSep, lpcKey);
+					lpcSep = ",";
+				}
+				if (caBuffer[0]) {
+					hashSetCpy(hSession->hASNs, p->eeCert.aki, caBuffer);
+				}
+			}
+			hashFree(hASNs);
+			errors[iNumErrors].iCode = JS_STS_ERROR_MISSING_CERTIFICATE;
+			errors[iNumErrors].lpcDescription = "missing certificate";
+			errors[iNumErrors].lpcReceived = p->eeCert.issuerName;
+			dumpErrors(hSession, ORIGIN_MFT, errors, p->eeCert.aki);
+		}
+		return;
 	}
 
 	dumpErrors(hSession, ORIGIN_MFT, errors, p->eeCert.aki);
@@ -765,15 +795,11 @@ void print_roa(HSESSION hSession, const struct roa *p)
 	char caNotAfter[64], caNotBefore[64], caNow[64];
 	time_t now;
 	struct tm *tm;
-	Error *errors;
+	Error errors[4];
 
 	assert(p != NULL);
 	iNumErrors = 0;
-	errors = malloc(sizeof(Error)*(4+p->ipsz));
-	if (errors == NULL) {
-		return;
-	}
-	memset (errors, 0, sizeof(Error)*(4+p->ipsz));
+	memset (errors, 0, sizeof(errors));
 
     now = time(NULL);
 	tm = gmtime(&now);
@@ -803,7 +829,7 @@ void print_roa(HSESSION hSession, const struct roa *p)
 	if (hashGet(hSession->hStaleMFTs, p->eeCert.aki)) {
 		errors[iNumErrors].iCode = JS_STS_ERROR_STALE_DATA;
 		errors[iNumErrors].lpcDescription = "stale data";
-		char caLine[1024];
+		char caLine[4096];
 		char caMax[32];
 		memset (caLine, 0, sizeof (caLine));
 		sprintf(caLine, "asn=%"PRIu32"; ip=", p->asid);
@@ -813,27 +839,35 @@ void print_roa(HSESSION hSession, const struct roa *p)
 				p->ips[i].afi, buf, sizeof(buf));
 			sprintf(caMax, "/%zu", p->ips[i].maxlength);
 			if (strlen(buf) > strlen(caMax) && strcmp(buf + strlen(buf) - strlen(caMax), caMax) != 0) {
-				strcat (buf, "-");
-				strcat (buf, caMax + 1);
+				strncat (buf, "-", sizeof(buf) - strlen(buf) - 1);
+				strncat (buf, caMax + 1, sizeof(buf) - strlen(buf) - 1);
 			}
-			strncat (caLine, lpcSep, sizeof(caLine) - 2);
-			strncat (caLine, buf, sizeof(caLine) - 2);
+			strncat (caLine, lpcSep, sizeof(caLine) - strlen(caLine) - 2);
+			strncat (caLine, buf, sizeof(caLine) - strlen(caLine) - 2);
 			lpcSep = ",";
 		}
-		strcat (caLine, ";");
+		strncat (caLine, ";", sizeof(caLine) - strlen(caLine) - 1);
 
 		errors[iNumErrors].lpcReceived = caLine;
 		iNumErrors++;
 	}
+
 	if (hSession->iStage == 1) {
-		errors[iNumErrors].iCode = JS_STS_ERROR_MISSING_CERTIFICATE;
-		errors[iNumErrors].lpcDescription = "missing certificate";
-		errors[iNumErrors].lpcReceived = p->eeCert.issuerName;
-		iNumErrors++;
+		// we are only considering files without errors
+		if (iNumErrors == 0) {
+			// store ASN
+			char caKey[1024];
+			i = hashGetAsInt(hSession->hASNs, p->eeCert.aki);
+			sprintf(caKey, "%s[%lu]", p->eeCert.issuerName, i);
+			sprintf(buf, "%"PRIu32, p->asid);
+
+			hashSetCpy(hSession->hASNs, caKey, buf);
+			hashSetInt(hSession->hASNs, p->eeCert.aki, i + 1);
+		}
+		return;
 	}
 
 	dumpErrors(hSession, ORIGIN_ROA, errors, p->eeCert.aki);
-	free(errors);
 
 	if (hSession->iOptOutput == OPT_OUTPUT_TEXT) {
 		printf("%*.*s: %s\n", TAB, TAB, "Now", caNow);
@@ -912,6 +946,10 @@ static void processFile(HSESSION hSession, char *lpcFilename) {
 	if (hashGetAsInt(hSession->hProcessed, lpcFilename)) {
 		// skip already processed
 		return;
+	}
+
+	if (hSession->iOptOutput == OPT_OUTPUT_TEXT) {
+		printf("Processing [%s]:\n", lpcFilename);
 	}
 
 	sz = strlen(lpcFilename);
@@ -994,6 +1032,9 @@ static void getMissingFiles(HSESSION hSession, char *lpcDirectory) {
     while ((entry = readdir(dir)) != NULL) {
 		iFlgFreeFilename = 1;
 		lpcFilename = malloc(strlen(lpcDirectory) + 1 + strlen(entry->d_name) + 1);
+		if (lpcFilename == NULL) {
+			return;
+		}
 		strcpy (lpcFilename, lpcDirectory);
 		strcat (lpcFilename, "/");
 		strcat (lpcFilename, entry->d_name);
@@ -1002,12 +1043,20 @@ static void getMissingFiles(HSESSION hSession, char *lpcDirectory) {
 	            getMissingFiles(hSession, lpcFilename);
 			}
         } else if (!hashGetAsInt(hSession->hProcessed, lpcFilename)) {
-			// For now only consider .mft files
 			sz = strlen(lpcFilename);
-			if (strcasecmp(lpcFilename + sz - 4, ".mft") == 0) {
-				if (stat (lpcFilename, &st) == 0 && (S_ISREG(st.st_mode) || S_ISLNK(st.st_mode))) {
-					sk_OPENSSL_STRING_push(hSession->filenames, lpcFilename);
-					iFlgFreeFilename = 0;
+			if (sz > 4) {
+				if (strcasecmp(lpcFilename + sz - 4, ".roa") == 0) {
+					if (stat (lpcFilename, &st) == 0 && (S_ISREG(st.st_mode) || S_ISLNK(st.st_mode))) {
+						// prioritize processing roas, thus gathering resources first
+						sk_OPENSSL_STRING_insert(hSession->filenames, lpcFilename, 0);
+						iFlgFreeFilename = 0;
+					}
+				}
+				if (strcasecmp(lpcFilename + sz - 4, ".mft") == 0) {
+					if (stat (lpcFilename, &st) == 0 && (S_ISREG(st.st_mode) || S_ISLNK(st.st_mode))) {
+						sk_OPENSSL_STRING_push(hSession->filenames, lpcFilename);
+						iFlgFreeFilename = 0;
+					}
 				}
 			}
         }
@@ -1025,9 +1074,6 @@ static void processMissingFiles(HSESSION hSession) {
 		while (sk_OPENSSL_STRING_num(hSession->filenames) > 0) {
 			char *lpcFilename = sk_OPENSSL_STRING_value(hSession->filenames, 0);
 			sk_OPENSSL_STRING_delete(hSession->filenames, 0);
-			if (hSession->iOptOutput == OPT_OUTPUT_TEXT) {
-				printf("Processing [%s]:\n", lpcFilename);
-			}
 			processFile(hSession, lpcFilename);
 			FileEntry_free(lpcFilename);
 		}
@@ -1063,7 +1109,6 @@ void txtDump(HSESSION hSession) {
 	while (sk_OPENSSL_STRING_num(hSession->filenames) > 0) {
 		char *lpcFilename = sk_OPENSSL_STRING_value(hSession->filenames, 0);
 		sk_OPENSSL_STRING_delete(hSession->filenames, 0);
-		printf("Processing [%s]:\n", lpcFilename);
 		processFile(hSession, lpcFilename);
 		FileEntry_free(lpcFilename);
 	}

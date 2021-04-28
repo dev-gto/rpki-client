@@ -55,6 +55,7 @@ static void usage(int iSts) {
 	}
     printf("Usage: %s [options] <files>\n\n"
            "  -h, --help                     Displays this help text.\n"
+           "  -q, --quiet                    Quiet mode, do not output warning messages.\n"
            "  -r, --recursive                Recursive. Follows internal file references.\n"
 		   "  -f <format>                    Format output\n"
 		   "                                    TEXT    - text default output of parsed files\n"
@@ -94,6 +95,11 @@ static int loadArguments(HSESSION hSession, int argc, char *argv [ ]) {
 		{
 			iShowUsage = 1;
 			break;
+		}
+		if (strcmp (argv[iargv], "-q") == 0 || strcmp (argv[iargv], "--quiet") == 0)
+		{
+			log_set_silent(1);
+			continue;
 		}
 		if (strcmp (argv[iargv], "-r") == 0 || strcmp (argv[iargv], "--recursive") == 0)
 		{

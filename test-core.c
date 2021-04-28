@@ -266,7 +266,7 @@ static int hostnameStatus(char *lpcHostname)
 	return iResult;
 }
 
-void print_cert(HSESSION hSession, const struct cert *p)
+static void print_cert(HSESSION hSession, const struct cert *p)
 {
 	int iNumErrors;
 	int	 sockt;
@@ -484,11 +484,70 @@ void print_cert(HSESSION hSession, const struct cert *p)
 				break;
 			}
 		printf("\n");
+	} else if (hSession->iOptOutput == OPT_OUTPUT_JSON) {
+		printf("{\"type\":\"cer\",\"now\":\"%s\"", caNow);
+		printf(",\"%s\":\"%ld\"",  "version", p->basic.version);
+		printf(",\"%s\":\"%s\"",  "serial", p->basic.serial);
+		printf(",\"%s\":\"%s\"",  "issuer", p->basic.issuerName);
+		printf(",\"%s\":\"%s\"",  "subject", p->basic.subject);
+		printf(",\"%s\":\"%s\"",  "notBefore", caNotBefore);
+		printf(",\"%s\":\"%s\"",  "notAfter", caNotAfter);
+		printf(",\"%s\":\"%s\"",  "ski", p->basic.ski);
+
+		if (p->basic.aki != NULL) {
+			printf(",\"%s\":\"%s\"",  "aki", p->basic.aki);
+		}
+		printf(",\"%s\":\"%s\"",  "mft", p->mft);
+
+		if (p->rep != NULL) {
+			printf(",\"%s\":\"%s\"",  "repo", p->rep);
+		}
+		if (p->crl != NULL) {
+			printf(",\"%s\":\"%s\"",  "crl", p->crl);
+		}
+		printf(",\"%s\":[", "as");
+		char *lpcSep="";
+		for (i = 0; i < p->asz; i++)
+			switch (p->as[i].type) {
+			case CERT_AS_ID:
+				printf("%s\"%"PRIu32"\"", lpcSep, p->as[i].id);
+				lpcSep=",";
+				break;
+			case CERT_AS_RANGE:
+				printf("%s\"%"PRIu32 "-%" PRIu32"\"",
+					lpcSep, p->as[i].range.min, p->as[i].range.max);
+				lpcSep=",";
+				break;
+			default:
+				break;
+			}
+		printf("],\"%s\":[", "ip");
+		lpcSep="";
+		for (i = 0; i < p->ipsz; i++)
+			switch (p->ips[i].type) {
+			case CERT_IP_ADDR:
+				ip_addr_print(&p->ips[i].ip,
+					p->ips[i].afi, buf1, sizeof(buf1));
+				printf("%s\"%s\"", lpcSep, buf1);
+				lpcSep=",";
+				break;
+			case CERT_IP_RANGE:
+				sockt = (p->ips[i].afi == AFI_IPV4) ?
+					AF_INET : AF_INET6;
+				inet_ntop(sockt, p->ips[i].min, buf1, sizeof(buf1));
+				inet_ntop(sockt, p->ips[i].max, buf2, sizeof(buf2));
+				printf("%s\"%s-%s\"", lpcSep, buf1, buf2);
+				lpcSep=",";
+				break;
+			default:
+				break;
+			}
+		printf("]}\n");
 	}
 }
 
 // http://www.geo-complex.com/shares/soft/unix/CentOS/OpenVPN/openssl-1.1.0c/crypto/x509/x_crl.c
-void print_crl (HSESSION hSession, X509_CRL *p)
+static void print_crl (HSESSION hSession, X509_CRL *p)
 {
 	int i, numRevoked;
 	int iNumErrors;
@@ -588,13 +647,52 @@ void print_crl (HSESSION hSession, X509_CRL *p)
 			}
 		}
 		printf("\n");
+	} else if (hSession->iOptOutput == OPT_OUTPUT_JSON) {
+		printf("{\"type\":\"crl\",\"now\":\"%s\"", caNow);
+		printf(",\"%s\":\"%ld\"",  "version", X509_CRL_get_version(p) + 1);
+		n = X509_CRL_get_ext_d2i(p,NID_crl_number,NULL,NULL);
+		if (n != NULL) {
+			printf(",\"%s\":\"%ld\"", "number", ASN1_INTEGER_get(n));
+			ASN1_INTEGER_free(n);
+		}
+		if (issuerName != NULL) {
+			printf(",\"%s\":\"%s\"", "issuer", issuerName);
+		}
+		printf(",\"%s\":\"%s\"", "lastUpdate", caLast);
+		printf(",\"%s\":\"%s\"", "nextUpdate", caNext);
+		numRevoked = sk_X509_REVOKED_num(revoked);
+		if (numRevoked > 0) {
+			printf(",\"%s\":[",  "revokedCerts");
+			char *lpcSep = "";
+			for (i = 0; i < numRevoked; i++) {
+				printf("%s{", lpcSep);
+				X509_REVOKED *rev = sk_X509_REVOKED_value(revoked, i);
+				if (rev != NULL) {
+					BIGNUM *bnSrl = ASN1_INTEGER_to_BN(X509_REVOKED_get0_serialNumber(rev), NULL);
+					if (bnSrl != NULL) {
+						char *lpcSrl = BN_bn2hex(bnSrl);
+						if (lpcSrl != NULL) {
+							printf("\"%s\":\"%s\",", "serial", lpcSrl);
+							OPENSSL_free(lpcSrl);
+						}
+						BN_free(bnSrl);
+					}
+				}
+				tm = asn1Time2Time(X509_REVOKED_get0_revocationDate(rev));
+				strftime(caRevocationDate, sizeof(caRevocationDate)-1, MSK_TIME_FORMAT, &tm);
+				printf("\"%s\":\"%s\"}", "revokedAt", caRevocationDate);
+				lpcSep=",";
+			}
+			printf("]");
+		}
+		printf("}\n");
 	}
 	if (issuerName != NULL) {
 		OPENSSL_free(issuerName);
 	}
 }
 
-void print_mft(HSESSION hSession, const struct mft *p)
+static void print_mft(HSESSION hSession, const struct mft *p)
 {
 	int iCurrentSlot;
 	int iNumErrors;
@@ -746,14 +844,32 @@ void print_mft(HSESSION hSession, const struct mft *p)
 		printf("%*.*s: %ld\n", TAB, TAB, "Manifest Number", p->manifestNumber);
 		printf("%*.*s: %s\n", TAB, TAB, "This Update", caThis);
 		printf("%*.*s: %s\n", TAB, TAB, "Next Update", caNext);
+	} else if (hSession->iOptOutput == OPT_OUTPUT_JSON) {
+		printf("{\"type\":\"mft\",\"now\":\"%s\"", caNow);
+		printf(",\"%s\":\"%ld\"",  "version", p->eeCert.version);
+		printf(",\"%s\":\"%s\"",  "serial", p->eeCert.serial);
+		printf(",\"%s\":\"%s\"",  "issuer", p->eeCert.issuerName);
+		printf(",\"%s\":\"%s\"",  "subject", p->eeCert.subject);
+		printf(",\"%s\":\"%s\"",  "notBefore", caNotBefore);
+		printf(",\"%s\":\"%s\"",  "notAfter", caNotAfter);
+		printf(",\"%s\":\"%s\"",  "sia", p->eeCert.eeLocation);
+		printf(",\"%s\":\"%s\"",  "ski", p->eeCert.ski);
+		printf(",\"%s\":\"%s\"",  "aki", p->eeCert.aki);
+		printf(",\"%s\":\"%ld\"",  "mftNumber", p->manifestNumber);
+		printf(",\"%s\":\"%s\"",  "thisUpdate", caThis);
+		printf(",\"%s\":\"%s\"",  "nextUpdate", caNext);
+		printf(",\"%s\":[",  "files");
 	}
-
+	lpcSep="";
 	iCurrentSlot = 0;
 	for (i = 0; i < p->filesz; i++) {
 		memset (caSHA256, 0, sizeof (caSHA256));
 		toHex(caSHA256, p->files[i].hash, 32);
 		if (hSession->iOptOutput == OPT_OUTPUT_TEXT) {
 			printf("%s  %s\n", caSHA256, p->files[i].file);
+		} else if (hSession->iOptOutput == OPT_OUTPUT_JSON) {
+			printf("%s{\"%s\":\"%s\"}", lpcSep, p->files[i].file, caSHA256);
+			lpcSep = ",";
 		}
 		if (hSession->iStage != 1 && hSession->iOptRecursive) {
 			// Append filename for processing
@@ -782,12 +898,14 @@ void print_mft(HSESSION hSession, const struct mft *p)
 	}
 	if (hSession->iOptOutput == OPT_OUTPUT_TEXT) {
 		printf("\n");
+	} else if (hSession->iOptOutput == OPT_OUTPUT_JSON) {
+		printf("]}\n");
 	}
 	free(lpcLocation);
 }
 
 // ROA
-void print_roa(HSESSION hSession, const struct roa *p)
+static void print_roa(HSESSION hSession, const struct roa *p)
 {
 	int iNumErrors;
 	char	 buf[256];
@@ -890,11 +1008,36 @@ void print_roa(HSESSION hSession, const struct roa *p)
 				buf, p->ips[i].maxlength);
 		}
 		printf("\n");
+	} else if (hSession->iOptOutput == OPT_OUTPUT_JSON) {
+		printf("{\"type\":\"roa\",\"now\":\"%s\"", caNow);
+		printf(",\"%s\":\"%ld\"",  "version", p->eeCert.version);
+		printf(",\"%s\":\"%s\"",  "serial", p->eeCert.serial);
+		printf(",\"%s\":\"%s\"",  "issuer", p->eeCert.issuerName);
+		printf(",\"%s\":\"%s\"",  "subject", p->eeCert.subject);
+		printf(",\"%s\":\"%s\"",  "notBefore", caNotBefore);
+		printf(",\"%s\":\"%s\"",  "notAfter", caNotAfter);
+		printf(",\"%s\":\"%s\"",  "sia", p->eeCert.eeLocation);
+		printf(",\"%s\":\"%s\"",  "ski", p->eeCert.ski);
+		printf(",\"%s\":\"%s\"",  "aki", p->eeCert.aki);
+		printf(",\"%s\":\"%d\"",  "as", p->asid);
+		printf(",\"%s\":[",  "blocks");
+		char *lpcSep = "";
+		for (i = 0; i < p->ipsz; i++) {
+			ip_addr_print(&p->ips[i].addr,
+				p->ips[i].afi, buf, sizeof(buf));
+			printf("%s\"%s", lpcSep, buf);
+			if (p->ips[i].addr.prefixlen != p->ips[i].maxlength) {
+				printf("-%lu", p->ips[i].maxlength);
+			}
+			printf("\"");
+			lpcSep=",";
+		}
+		printf("]}\n");
 	}
 }
 
 // TAL
-void print_tal(HSESSION hSession, const struct tal *p)
+static void print_tal(HSESSION hSession, const struct tal *p)
 {
 	size_t	 i;
 	unsigned char *lpcBuffer;
@@ -917,7 +1060,7 @@ void print_tal(HSESSION hSession, const struct tal *p)
 }
 
 // This is not an original code from openbsd
-struct tal *
+static struct tal *
 tal_parse_from_file(const char *fn)
 {
 	char		*buf;
@@ -1080,7 +1223,7 @@ static void processMissingFiles(HSESSION hSession) {
 	}
 }
 
-void jsMonitor(HSESSION hSession) {
+static void validateFiles(HSESSION hSession) {
 	char caNow[64];
 	time_t now;
 	struct tm *tm;
@@ -1105,7 +1248,7 @@ void jsMonitor(HSESSION hSession) {
 	printf("]\n}\n");
 }
 
-void txtDump(HSESSION hSession) {
+static void dumpFiles(HSESSION hSession) {
 	while (sk_OPENSSL_STRING_num(hSession->filenames) > 0) {
 		char *lpcFilename = sk_OPENSSL_STRING_value(hSession->filenames, 0);
 		sk_OPENSSL_STRING_delete(hSession->filenames, 0);
@@ -1114,4 +1257,14 @@ void txtDump(HSESSION hSession) {
 	}
 
 	processMissingFiles(hSession);
+}
+
+int sessionRun (HSESSION hSession) {
+	if (hSession->iOptOutput == OPT_OUTPUT_JS_MONITOR) {
+		validateFiles(hSession);
+	} else {
+		dumpFiles(hSession);
+	}
+
+	return 0;
 }

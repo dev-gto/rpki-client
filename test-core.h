@@ -23,7 +23,8 @@
 #include "hash.h"
 
 #define OPT_OUTPUT_TEXT 0
-#define OPT_OUTPUT_JS_MONITOR 1
+#define OPT_OUTPUT_JSON 1
+#define OPT_OUTPUT_JS_MONITOR 2
 
 typedef struct {
     int iCode;
@@ -55,18 +56,8 @@ typedef struct Session
     HHASH hProcessed;               // Hash key: filename; value: 1 - processed
 } *HSESSION;
 
-void print_cert(HSESSION hSession, const struct cert *p);
-void print_crl(HSESSION hSession, X509_CRL *p);
-void print_mft(HSESSION hSession, const struct mft *p);
-void print_roa(HSESSION hSession, const struct roa *p);
-void print_tal(HSESSION hSession, const struct tal *p);
-
 void sessionInit (HSESSION hSession);
 int sessionFree (HSESSION hSession, int iRtn);
-
-struct tal	*tal_parse_from_file(const char *fn);
-
-void jsMonitor(HSESSION hSession);
-void txtDump(HSESSION hSession);
+int sessionRun (HSESSION hSession);
 
 #endif

@@ -49,12 +49,7 @@ OBJS = as.o \
 	   x509.o
 ALLOBJS	= $(OBJS) \
 	   main.o \
-	   test-cert.o \
-	   test-crl.o \
-	   test-mft.o \
-	   test-roa.o \
-	   test-rpki.o \
-	   test-tal.o
+	   test-rpki.o
 BINS = rpki-client \
 	   test-rpki
 
@@ -124,7 +119,7 @@ distcheck:
 regress:
 	# Do nothing.
 
-$(ALLOBJS): extern.h config.h site.h
+$(ALLOBJS): extern.h test-core.h config.h site.h
 
 rpki-client.install.8: rpki-client.8 site.sed
 	sed -f site.sed rpki-client.8 >$@

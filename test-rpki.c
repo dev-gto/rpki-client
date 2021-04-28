@@ -57,8 +57,9 @@ static void usage(int iSts) {
            "  -h, --help                     Displays this help text.\n"
            "  -r, --recursive                Recursive. Follows internal file references.\n"
 		   "  -f <format>                    Format output\n"
-		   "                                    TEXT    - default\n"
-		   "                                    MONITOR - JSON format containing only\n"
+		   "                                    TEXT    - text default output of parsed files\n"
+		   "                                    JSON    - JSON output of parsed files\n"
+		   "                                    MONITOR - JSON error report\n"
            "  -s, --about-to-stale <seconds> Also consider objets about to become stale in <seconds>.\n"
            "                                 Default: 0 (disabled)\n"
 		   "  --local-repository <directory> Directory where the repository local cache will be read.\n"
@@ -119,10 +120,13 @@ static int loadArguments(HSESSION hSession, int argc, char *argv [ ]) {
 			lpcValue = &argv[iargv][2];
 			if (!*lpcValue)
 				lpcValue = argv[++iargv];
-			if (lpcValue != NULL && strcmp (lpcValue, "MONITOR") == 0) {
+			if (lpcValue != NULL && strcasecmp (lpcValue, "MONITOR") == 0) {
 				hSession->iOptOutput = OPT_OUTPUT_JS_MONITOR;
 				hSession->iOptRecursive = 1;
 				log_set_silent(1);
+			}
+			if (lpcValue != NULL && strcasecmp (lpcValue, "JSON") == 0) {
+				hSession->iOptOutput = OPT_OUTPUT_JSON;
 			}
 			continue;
 		}		
@@ -187,12 +191,7 @@ int main(int argc, char *argv[])
 	if (loadArguments(hSession, argc, argv) != 0)
 		return sessionFree(hSession, 4);
 
-	if (hSession->iOptOutput == OPT_OUTPUT_JS_MONITOR) {
-		jsMonitor(hSession);
-	}
-	else {
-		txtDump(hSession);
-	}
+	sessionRun(hSession);
 
 	return sessionFree (hSession, EXIT_SUCCESS);
 }

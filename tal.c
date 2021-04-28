@@ -100,8 +100,17 @@ https_uri_parse(const char **hostp, size_t *hostsz,
 	return 1;
 }
 
+static int
+tal_cmp(const void *a, const void *b)
+{
+	char * const *sa = a;
+	char * const *sb = b;
+
+	return strcmp(*sa, *sb);
+}
+
 /*
- * Inner function for parsing RFC 7730 from a buffer.
+ * Inner function for parsing RFC 8630 from a buffer.
  * Returns a valid pointer on success, NULL otherwise.
  * The pointer must be freed with tal_free().
  */
@@ -109,9 +118,9 @@ static struct tal *
 tal_parse_buffer(const char *fn, char *buf)
 {
 	char		*nl, *line;
-	unsigned char	*b64 = NULL;
-	size_t		 sz;
-	int		 rc = 0, b64sz;
+	unsigned char	*der;
+	size_t		 dersz;
+	int		 rc = 0;
 	struct tal	*tal = NULL;
 	enum rtype	 rp;
 	EVP_PKEY	*pkey = NULL;
@@ -130,6 +139,22 @@ tal_parse_buffer(const char *fn, char *buf)
 		/* Zero-length line is end of section. */
 		if (*line == '\0')
 			break;
+
+		/* make sure only US-ASCII chars are in the URL */
+		if (!valid_uri(line, nl - line, NULL)) {
+			log_warnx("%s: invalid URI", fn);
+			goto out;
+		}
+		/* Check that the URI is sensible */
+		if (!(strncasecmp(line, "https://", 8) == 0 ||
+		    strncasecmp(line, "rsync://", 8) == 0)) {
+			log_warnx("%s: unsupported URL schema: %s", fn, line);
+			goto out;
+		}
+		if (strcasecmp(nl - 4, ".cer")) {
+			log_warnx("%s: not a certificate URL: %s", fn, line);
+			goto out;
+		}
 
 		/* Append to list of URIs. */
 		tal->uri = reallocarray(tal->uri,
@@ -168,25 +193,21 @@ tal_parse_buffer(const char *fn, char *buf)
 	} else if (tal->urisz > 1)
 		log_warnx("%s: multiple URIs: using the first", fn);
 
-	sz = strlen(buf);
-	if (sz == 0) {
-		log_warnx("%s: RFC 7730 section 2.1: subjectPublicKeyInfo: "
-		    "zero-length public key", fn);
+	/* sort uri lexicographically so https:// is preferred */
+	qsort(tal->uri, tal->urisz, sizeof(tal->uri[0]), tal_cmp);
+
+	/* Now the Base64-encoded public key. */
+	if ((base64_decode(buf, &der, &dersz)) == -1) {
+		warnx("%s: RFC 7730 section 2.1: subjectPublicKeyInfo: "
+		    "bad public key", fn);
 		goto out;
 	}
 
-	/* Now the BASE64-encoded public key. */
-	sz = ((sz + 3) / 4) * 3 + 1;
-	if ((b64 = malloc(sz)) == NULL)
-		err(1, NULL);
-	if ((b64sz = b64_pton(buf, b64, sz)) < 0)
-		errx(1, "b64_pton");
-
-	tal->pkey = b64;
-	tal->pkeysz = b64sz;
+	tal->pkey = der;
+	tal->pkeysz = dersz;
 
 	/* Make sure it's a valid public key. */
-	pkey = d2i_PUBKEY(NULL, (const unsigned char **)&b64, b64sz);
+	pkey = d2i_PUBKEY(NULL, (const unsigned char **)&der, dersz);
 	if (pkey == NULL) {
 		cryptowarnx("%s: RFC 7730 section 2.1: subjectPublicKeyInfo: "
 		    "failed public key parse", fn);
@@ -225,12 +246,10 @@ tal_parse(const char *fn, char *buf)
 	else
 		d++;
 	dlen = strlen(d);
-	if (strcasecmp(d + dlen - 4, ".tal") == 0)
+	if (dlen > 4 && strcasecmp(d + dlen - 4, ".tal") == 0)
 		dlen -= 4;
-	if ((p->descr = malloc(dlen + 1)) == NULL)
+	if ((p->descr = strndup(d, dlen)) == NULL)
 		err(1, NULL);
-	memcpy(p->descr, d, dlen);
-	p->descr[dlen] = '\0';
 
 	return p;
 }

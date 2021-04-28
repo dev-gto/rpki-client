@@ -111,8 +111,8 @@ roa_parse_addr(const ASN1_OCTET_STRING *os, enum afi afi, struct parse *p)
 		/* FIXME: maximum check. */
 	}
 
-	p->res->ips = reallocarray(p->res->ips,
-		p->res->ipsz + 1, sizeof(struct roa_ip));
+	p->res->ips = recallocarray(p->res->ips, p->res->ipsz, p->res->ipsz + 1,
+	    sizeof(struct roa_ip));
 	if (p->res->ips == NULL)
 		err(1, NULL);
 	res = &p->res->ips[p->res->ipsz++];
@@ -349,8 +349,12 @@ roa_parse(X509 **x509, const char *fn)
 
 	if ((p.res = calloc(1, sizeof(struct roa))) == NULL)
 		err(1, NULL);
-    if (!x509Basic_parse(*x509, fn, &p.res->eeCert, 1))
+    if (!x509Basic_parse(*x509, fn, &p.res->eeCert, 1)) {
+		log_warnx("%s: RFC 6487 section 4.8: "
+		    "missing AIA, AKI or SKI X509 extension", fn);
 		goto out;
+	}
+
 	if (!roa_parse_econtent(cms, cmsz, &p))
 		goto out;
 

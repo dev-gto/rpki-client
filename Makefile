@@ -29,6 +29,7 @@ OBJS = as.o \
 	   compats.o \
 	   crl.o \
 	   encoding.o \
+	   gbr.o \
 	   hash.o \
 	   io.o \
 	   ip.o \

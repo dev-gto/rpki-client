@@ -115,8 +115,9 @@ struct	basicCertificate {
 	char	*serial;
 	char	*issuerName;
 	char	*subject;
-	char	*ski; /* SKI */
-	char	*aki; /* AKI */
+	char    *aia; /* AIA (or NULL, for trust anchor) */
+	char    *aki; /* AKI (or NULL, for trust anchor) */
+	char    *ski; /* SKI */
 	char	*eeLocation; /* EE certificate's SIA */
 	time_t	notAfter;
 	time_t	notBefore;
@@ -231,6 +232,14 @@ struct roa {
 };
 
 /*
+ * A single Ghostbuster record
+ */
+struct gbr {
+	char		*vcard;
+	struct basicCertificate eeCert; /* End-Entity Certificate (aka Resource Certificate) */
+};
+
+/*
  * A single VRP element (including ASID)
  */
 struct vrp {
@@ -283,7 +292,7 @@ struct auth *auth_find(struct auth_tree *, const char *);
 
 /*
  * Resource types specified by the RPKI profiles.
- * There are others (e.g., gbr) that we don't consider.
+ * There might be others we don't consider.
  */
 enum rtype {
 	RTYPE_EOF = 0,
@@ -291,7 +300,8 @@ enum rtype {
 	RTYPE_MFT,
 	RTYPE_ROA,
 	RTYPE_CER,
-	RTYPE_CRL
+	RTYPE_CRL,
+	RTYPE_GBR,
 };
 
 /* Routines for RPKI entities. */
@@ -320,6 +330,9 @@ struct roa	*roa_parse(X509 **, const char *);
 struct roa	*roa_read(int);
 void		 roa_insert_vrps(struct vrp_tree *, struct roa *, size_t *,
 		    size_t *);
+
+void		 gbr_free(struct gbr *);
+struct gbr	*gbr_parse(X509 **, const char *);
 
 /* crl.c */
 X509_CRL	*crl_parse(const char *);
@@ -449,5 +462,8 @@ void	logx(const char *fmt, ...)
 		    __attribute__((format(printf, 1, 2)));
 
 int	mkpath(const char *);
+
+#define		RPKI_PATH_OUT_DIR	"/var/db/rpki-client"
+#define		RPKI_PATH_BASE_DIR	"/var/cache/rpki-client"
 
 #endif /* ! EXTERN_H */

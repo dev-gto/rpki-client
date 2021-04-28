@@ -1,4 +1,4 @@
-.\"	$OpenBSD$
+.\"	$OpenBSD: rpki-client.8,v 1.43 2021/04/08 14:03:32 job Exp $
 .\"
 .\" Copyright (c) 2019 Kristaps Dzonsons <kristaps@bsd.lv>
 .\"
@@ -14,18 +14,19 @@
 .\" ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 .\" OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\"
-.Dd $Mdocdate$
+.Dd $Mdocdate: April 8 2021 $
 .Dt RPKI-CLIENT 8
 .Os
 .Sh NAME
 .Nm rpki-client
-.Nd RPKI validation for Route Origin Validation
+.Nd RPKI validator to support BGP Origin Validation
 .Sh SYNOPSIS
 .Nm
-.Op Fl Bcfjnov
-.Op Fl b Ar bind_addr
+.Op Fl BcjnoRrVv
+.Op Fl b Ar sourceaddr
 .Op Fl d Ar cachedir
 .Op Fl e Ar rsync_prog
+.Op Fl s Ar timeout
 .Op Fl T Ar table
 .Op Fl t Ar tal
 .Op Ar outputdir
@@ -33,7 +34,8 @@
 The
 .Nm
 utility queries the RPKI repository system with
-.Xr @RPKI_RSYNC_COMMAND@ 1
+a built-in HTTP client and
+.Xr openrsync 1
 to fetch all X.509 certificates, manifests, and revocation lists under a given
 .Em Trust Anchor .
 .Nm
@@ -49,13 +51,18 @@ in various formats.
 The options are as follows:
 .Bl -tag -width Ds
 .It Fl B
-Create output in the file
+Create output in the files
+.Pa bird1v4 ,
+.Pa bird1v6 ,
+and
 .Pa bird
+(for bird2)
 in the output directory which is suitable for the BIRD internet routing daemon.
-.It Fl b Ar bind_addr
-Tell the rsync client to use the specified
-.Ar bind_addr
-as the source address for connections.
+.It Fl b Ar sourceaddr
+Tell the HTTP and rsync clients to use
+.Ar sourceaddr
+as the source address for connections, which is useful on machines
+with multiple interfaces.
 .It Fl c
 Create output in the file
 .Pa csv
@@ -67,30 +74,28 @@ The directory where
 .Nm
 will store the cached repository data.
 Defaults to
-.Pa @RPKI_PATH_OUT_DIR@ .
+.Pa /var/cache/rpki-client .
 .It Fl e Ar rsync_prog
 Use
 .Ar rsync_prog
 instead of
-.Xr @RSYNC@ 1
+.Xr openrsync 1
 to fetch repositories.
 It must accept the
-.Fl rlt ,
-.Fl -address
+.Fl rt
 and
-.Fl -delete
+.Fl -address
 flags and connect with rsync-protocol locations.
-.It Fl f
-Accept out-of-date manifests.
-This will still report if a manifest has expired.
 .It Fl j
 Create output in the file
 .Pa json
 in the output directory as JSON object.
-This format is identical to that
-produced by the RIPE NCC RPKI Validator and NLnet Labs routinator.
+This format is similar to that produced by other RPKI validators.
 .It Fl n
-Assume that all requested repositories exist: don't update.
+Offline mode.
+Validate the contents of
+.Ar cachedir
+without synchronizing via RRDP or RSYNC.
 .It Fl o
 Create output in the file
 .Pa openbgpd
@@ -103,12 +108,28 @@ If the
 and
 .Fl j
 options are not specified this is the default.
+.It Fl R
+Do not synchronize via RRDP.
+This is the default.
+.It Fl r
+Attempt to synchronize via RRDP.
+If RRDP fails, RSYNC will be used.
+This flag is for testing purposes and will be removed in a future release.
+Mutually exclusive with
+.Fl n .
+.It Fl s Ar timeout
+Terminate after
+.Ar timeout
+seconds of runtime, because normal practice will restart from
+.Xr cron 8 .
+Disable by specifying 0.
+Defaults to 1 hour.
 .It Fl T Ar table
 For BIRD output generated with the
-.Fl b
+.Fl B
 option use
 .Ar table
-as roa table name instead of the default 'roa'.
+as roa table name instead of the default 'ROAS'.
 .It Fl t Ar tal
 Specify a
 .Em Trust Anchor Location Pq TAL
@@ -117,7 +138,9 @@ This option can be used multiple times to load multiple TALs.
 By default
 .Nm
 will load all TAL files in
-.Pa @RPKI_TAL_DIR@ .
+.Pa /etc/rpki .
+.It Fl V
+Show the version and exit.
 .It Fl v
 Specified once, prints information about status.
 Twice, prints each filename as it's processed.
@@ -126,7 +149,7 @@ The directory where
 .Nm
 will write the output files.
 Defaults to
-.Pa @RPKI_PATH_OUT_DIR@ .
+.Pa /var/db/rpki-client/ .
 .El
 .Pp
 By default
@@ -136,17 +159,24 @@ produces a list of unique
 statements in
 .Fl o
 (OpenBGPD compatible) output.
+.Pp
+.Nm
+should be run hourly by
+.Xr cron 8 :
+use
+.Xr crontab 1
+to uncomment the entry in root's crontab.
 .\" .Sh ENVIRONMENT
 .\" For sections 1, 6, 7, and 8 only.
 .Sh FILES
-.Bl -tag -width "@RPKI_PATH_OUT_DIR@/openbgpd" -compact
-.It Pa @RPKI_TAL_DIR@/*.tal
+.Bl -tag -width "/var/db/rpki-client/openbgpd" -compact
+.It Pa /etc/rpki/*.tal
 default TAL files used unless
 .Fl t Ar tal
 is specified.
-.It Pa @RPKI_PATH_BASE_DIR@
+.It Pa /var/cache/rpki-client
 cached repository data.
-.It Pa @RPKI_PATH_OUT_DIR@/openbgpd
+.It Pa /var/db/rpki-client/openbgpd
 default roa-set output file.
 .El
 .Sh EXIT STATUS
@@ -156,7 +186,7 @@ default roa-set output file.
 .\" .Sh DIAGNOSTICS
 .\" For sections 1, 4, 6, 7, 8, and 9 printf/stderr messages only.
 .Sh SEE ALSO
-.Xr @RPKI_RSYNC_COMMAND@ 1 ,
+.Xr openrsync 1 ,
 .Xr bgpd.conf 5
 .Sh STANDARDS
 The following standards are used or referenced in
@@ -192,10 +222,13 @@ Manifests for the Resource Public Key Infrastructure (RPKI).
 .It RFC 6487
 A Profile for X.509 PKIX Resource Certificates.
 .It RFC 6488
-Signed Object Template for the Resource Public Key Infrastructure
-(RPKI).
+Signed Object Template for the Resource Public Key Infrastructure (RPKI).
+.It RFC 6493
+The Resource Public Key Infrastructure (RPKI) Ghostbusters Record.
 .It RFC 7730
 Resource Public Key Infrastructure (RPKI) Trust Anchor Locator.
+.It RFC 8182
+The RPKI Repository Delta Protocol (RRDP).
 .El
 .\" .Sh HISTORY
 .Sh AUTHORS

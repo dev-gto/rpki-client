@@ -115,7 +115,6 @@ ip_addr_check_overlap(const struct cert_ip *ip, const char *fn,
 	size_t	 i, sz = ip->afi == AFI_IPV4 ? 4 : 16;
 	int	 inherit_v4 = 0, inherit_v6 = 0;
 	int	 has_v4 = 0, has_v6 = 0, socktype;
-	char	 buf[64];
 
 	/*
 	 * FIXME: cache this by having a flag on the cert_ip, else we're
@@ -152,6 +151,8 @@ ip_addr_check_overlap(const struct cert_ip *ip, const char *fn,
 	/* Check our ranges. */
 
 	for (i = 0; i < ipsz; i++) {
+		char	 buf[64];
+
 		if (ips[i].afi != ip->afi)
 			continue;
 		if (memcmp(ips[i].max, ip->min, sz) <= 0 ||
@@ -241,9 +242,13 @@ static void
 ip4_addr2str(const struct ip_addr *addr, char *b, size_t bsz)
 {
 	char buf[16];
+	int ret;
 
-	snprintf(b, bsz, "%s/%hhu", inet_ntop(AF_INET, addr->addr, buf,
-	    sizeof(buf)), addr->prefixlen);
+	if (inet_ntop(AF_INET, addr->addr, buf, sizeof(buf)) == NULL)
+		err(1, "inet_ntop");
+	ret = snprintf(b, bsz, "%s/%hhu", buf, addr->prefixlen);
+	if (ret < 0 || (size_t)ret >= bsz)
+		err(1, "malformed IPV4 address");
 }
 
 /*
@@ -254,10 +259,14 @@ ip4_addr2str(const struct ip_addr *addr, char *b, size_t bsz)
 static void
 ip6_addr2str(const struct ip_addr *addr, char *b, size_t bsz)
 {
-	char	 buf[44];
+	char buf[44];
+	int ret;
 
-	snprintf(b, bsz, "%s/%hhu", inet_ntop(AF_INET6, addr->addr, buf,
-	    sizeof(buf)), addr->prefixlen);
+	if (inet_ntop(AF_INET6, addr->addr, buf, sizeof(buf)) == NULL)
+		err(1, "inet_ntop");
+	ret = snprintf(b, bsz, "%s/%hhu", buf, addr->prefixlen);
+	if (ret < 0 || (size_t)ret >= bsz)
+		err(1, "malformed IPV6 address");
 }
 
 /*
